@@ -1,0 +1,1 @@
+See Claude Reference section 10. Web tests need the website folder; SQL suites: sql/tests/run_build.sh (VER=v8.1). scan_param_html.js finds helpers that escape a parameter while callers pass ready-made HTML (must report 0).

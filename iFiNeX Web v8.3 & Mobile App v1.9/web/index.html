@@ -1,0 +1,1520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>iFiNeX · Squad Split</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https://lznnetxeklmdrykxtsbm.supabase.co; connect-src 'self' https://lznnetxeklmdrykxtsbm.supabase.co wss://lznnetxeklmdrykxtsbm.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'">
+<meta name="referrer" content="no-referrer">
+<!-- v8.1 SECURITY: the page may only talk to its own origin + your Supabase project (https://lznnetxeklmdrykxtsbm.supabase.co); a script injected by an attacker can no longer send your session anywhere else. -->
+<meta name="theme-color" content="#0b0b18">
+<meta name="application-name" content="iFiNeX">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap" rel="stylesheet">
+<script src="vendor/supabase.js"></script>
+<script src="ifinex-session.js"></script>
+<script src="ifinex-alerts.js"></script>
+<script defer src="vendor/jspdf.umd.min.js"></script>
+<script defer src="vendor/jspdf.plugin.autotable.min.js"></script>
+<script defer src="vendor/xlsx.full.min.js"></script>
+<script defer src="ifinex-theme.js"></script>
+<script defer src="ifinex-tools.js"></script>
+<script defer src="ifinex-datasets-squad.js"></script>
+<style>
+:root {
+  --bg:#0b0b18;--card:#13132a;--card2:#1a1a35;--border:#2a2a50;
+  --accent1:#ff6b6b;--accent2:#ffd93d;--accent3:#6bcb77;--accent4:#4d96ff;--accent5:#ff922b;
+  --purple:#b06aff;--text:#f0f0ff;--muted:#7777aa;--red:#ff6b6b;--green:#6bcb77;
+  /* v7.4: same gradient/surface tokens as bill-tracker.html, defaulted to
+     Squad Split's OWN red/orange brand identity rather than Bill
+     Tracker's blue/purple — the two apps keep their distinct look, but
+     both now respond to the same theme system. */
+  --grad-a:#ff6b6b;--grad-b:#ff922b;
+  --grad-pos-a:#6bcb77;--grad-pos-b:#4d96ff;
+  --header-grad-a:#1a0a2e;--header-grad-b:#0a1a3e;
+  --surface-blur:none;--surface-shadow:none;--elev-shadow:0 12px 40px rgba(0,0,0,.45);
+}
+/* Same theme system as bill-tracker.html (v7.0 base 5, v7.4 +8 more) —
+   applied read-only here (picked in Bill Tracker's 🎨 Appearance, just
+   honored on this page too so navigating between the two doesn't jar). See
+   bill-tracker.html for the full palette rationale. */
+html[data-theme="ocean"]{ --bg:#071820;--card:#0e2530;--card2:#123244;--border:#1c4a5e;--text:#eaf6fb;--muted:#6b9aad; }
+html[data-theme="sunset"]{ --bg:#1a0f14;--card:#2a1620;--card2:#33192a;--border:#4a2438;--text:#fbeef1;--muted:#a67f8c; }
+html[data-theme="forest"]{ --bg:#0c1710;--card:#132a1c;--card2:#183524;--border:#2a4a35;--text:#eafbf0;--muted:#7aa38c; }
+html[data-theme="mono"]{ --bg:#0a0a0a;--card:#161616;--card2:#1e1e1e;--border:#333333;--text:#f2f2f2;--muted:#8a8a8a; }
+html[data-theme="glass-aqua"]{ --bg:#04141c;--card:rgba(255,255,255,.08);--card2:rgba(255,255,255,.05);--border:rgba(255,255,255,.18);--text:#eafcff;--muted:#8fc2cf;
+  --grad-a:#22d3ee;--grad-b:#4d96ff;--grad-pos-a:#34e6b0;--grad-pos-b:#22d3ee;--header-grad-a:rgba(6,30,40,.55);--header-grad-b:rgba(4,18,28,.55);
+  --surface-blur:blur(18px);--surface-shadow:0 8px 32px rgba(0,40,60,.35);--elev-shadow:0 16px 50px rgba(0,20,35,.5); }
+html[data-theme="glass-dark"]{ --bg:#0a0a12;--card:rgba(255,255,255,.05);--card2:rgba(255,255,255,.03);--border:rgba(255,255,255,.12);--text:#f0f0ff;--muted:#9494b8;
+  --header-grad-a:rgba(15,15,25,.5);--header-grad-b:rgba(10,10,18,.5);--surface-blur:blur(16px);--surface-shadow:0 8px 30px rgba(0,0,0,.45);--elev-shadow:0 16px 50px rgba(0,0,0,.55); }
+html[data-theme="neo-light"]{ --bg:#e8ebf1;--card:#e8ebf1;--card2:#e2e5ec;--border:transparent;--text:#2a2d3a;--muted:#666b80;
+  --accent1:#d94f6b;--accent2:#c99417;--accent3:#3f9e63;--accent4:#3f6fc9;--accent5:#c96a1f;--purple:#8b5fc9;--red:#d94f6b;--green:#3f9e63;
+  --grad-a:#d9636b;--grad-b:#d98a3f;--grad-pos-a:#4f9e73;--grad-pos-b:#4d7fdb;--header-grad-a:#e8ebf1;--header-grad-b:#e2e5ec;
+  --surface-blur:none;--surface-shadow:7px 7px 16px rgba(163,177,198,.55),-7px -7px 16px rgba(255,255,255,.9);--elev-shadow:9px 9px 20px rgba(163,177,198,.6),-9px -9px 20px rgba(255,255,255,.95); }
+html[data-theme="neo-dark"]{ --bg:#1e2028;--card:#1e2028;--card2:#1a1c23;--border:transparent;--text:#e8e9f0;--muted:#8a8d9c;
+  --grad-a:#e07a6e;--grad-b:#e0a75c;--grad-pos-a:#5fc98a;--grad-pos-b:#5c8fe0;--header-grad-a:#1e2028;--header-grad-b:#1a1c23;
+  --surface-blur:none;--surface-shadow:7px 7px 16px rgba(0,0,0,.5),-7px -7px 16px rgba(255,255,255,.03);--elev-shadow:9px 9px 22px rgba(0,0,0,.55),-9px -9px 22px rgba(255,255,255,.04); }
+html[data-theme="aurora"]{ --bg:#0d0620;--card:rgba(255,255,255,.07);--card2:rgba(255,255,255,.04);--border:rgba(255,255,255,.16);--text:#f5f0ff;--muted:#a597c2;
+  --grad-a:#ff92d0;--grad-b:#b06aff;--grad-pos-a:#6bcb77;--grad-pos-b:#4d96ff;--header-grad-a:rgba(20,10,35,.5);--header-grad-b:rgba(12,6,22,.5);
+  --surface-blur:blur(18px);--surface-shadow:0 8px 32px rgba(60,20,80,.4);--elev-shadow:0 16px 50px rgba(40,10,60,.5); }
+html[data-theme="noise-dark"]{ --bg:#0e0e12;--card:#161619;--card2:#1c1c20;--border:#2c2c33;--text:#f0f0f2;--muted:#87879a;
+  --header-grad-a:#141418;--header-grad-b:#0e0e12;--surface-blur:none;--surface-shadow:0 4px 18px rgba(0,0,0,.4);--elev-shadow:0 14px 40px rgba(0,0,0,.5); }
+html[data-theme="sandstone"]{ --bg:#2a1d14;--card:#33241a;--card2:#3a2a1e;--border:#4a3526;--text:#f7ece0;--muted:#b89880;
+  --grad-a:#ffb066;--grad-b:#ff7a5c;--grad-pos-a:#d9a441;--grad-pos-b:#ff7a5c;--header-grad-a:#2a1d14;--header-grad-b:#1f150e;
+  --surface-blur:none;--surface-shadow:5px 5px 14px rgba(0,0,0,.35),-3px -3px 10px rgba(255,180,120,.05);--elev-shadow:0 14px 40px rgba(0,0,0,.45); }
+html[data-theme="custom-photo"]{ --bg:#0c0c16;--card:rgba(20,20,30,.35);--card2:rgba(20,20,30,.25);--border:rgba(255,255,255,.14);--text:#f5f5ff;--muted:#a8a8c5;
+  --header-grad-a:rgba(10,10,18,.45);--header-grad-b:rgba(6,6,12,.45);--surface-blur:blur(14px);--surface-shadow:0 8px 30px rgba(0,0,0,.4);--elev-shadow:0 16px 45px rgba(0,0,0,.5); }
+#bg-photo-layer{ position:fixed; inset:0; z-index:-1; background-size:cover; background-position:center; opacity:0; transition:opacity .3s; pointer-events:none; }
+#bg-photo-layer.on{ opacity:var(--bg-photo-opacity, 0.30); }
+#theme-fx-layer{ position:fixed; inset:0; z-index:-2; opacity:0; transition:opacity .4s; background-size:cover; background-position:center; pointer-events:none; }
+html[data-theme="glass-aqua"] #theme-fx-layer{ opacity:1; background:
+  radial-gradient(circle at 15% 20%,rgba(77,214,255,.55),transparent 45%),radial-gradient(circle at 85% 15%,rgba(77,150,255,.45),transparent 50%),
+  radial-gradient(circle at 50% 85%,rgba(107,203,220,.5),transparent 55%),linear-gradient(160deg,#04202a,#031521 60%,#02101a); animation:fxDrift 22s ease-in-out infinite alternate; }
+html[data-theme="glass-dark"] #theme-fx-layer{ opacity:1; background:radial-gradient(circle at 30% 20%,rgba(255,255,255,.06),transparent 40%),linear-gradient(160deg,#12131c,#0a0a12 70%); }
+html[data-theme="aurora"] #theme-fx-layer{ opacity:1; background:
+  radial-gradient(circle at 20% 25%,rgba(176,106,255,.55),transparent 45%),radial-gradient(circle at 80% 20%,rgba(255,146,208,.45),transparent 50%),
+  radial-gradient(circle at 50% 80%,rgba(77,150,255,.5),transparent 55%),linear-gradient(160deg,#160a2e,#0d0620 60%,#08041a); animation:fxDrift 18s ease-in-out infinite alternate; }
+html[data-theme="noise-dark"] #theme-fx-layer{ opacity:1;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/></svg>"),
+  linear-gradient(160deg,#0e0e12,#08080a 70%); background-size:120px 120px,cover; }
+html[data-theme="sandstone"] #theme-fx-layer{ opacity:1;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.10'/></svg>"),
+  radial-gradient(circle at 20% 20%,rgba(255,196,140,.35),transparent 50%),linear-gradient(160deg,#2a1d14,#1c130d 70%); background-size:120px 120px,cover,cover; }
+html[data-theme="custom-photo"] #theme-fx-layer{ opacity:1; background:linear-gradient(160deg,#0c0c16,#08080f); }
+@keyframes fxDrift{ 0%{ filter:hue-rotate(0deg) brightness(1); } 100%{ filter:hue-rotate(18deg) brightness(1.08); } }
+.card,.login-box,.exp-item-card,.month-nav,.notif-panel,.modal-box,.toast,.app-header,.admin-header,.member-card,.split-card{
+  backdrop-filter:var(--surface-blur);-webkit-backdrop-filter:var(--surface-blur);
+}
+.card,.exp-item-card,.month-nav,.member-card,.split-card{ box-shadow:var(--surface-shadow); }
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+.bg-mesh{position:fixed;inset:0;z-index:0;pointer-events:none;
+  background:radial-gradient(ellipse 600px 400px at 10% 20%,rgba(255,107,107,.08) 0%,transparent 70%),
+  radial-gradient(ellipse 500px 500px at 90% 80%,rgba(77,150,255,.08) 0%,transparent 70%),
+  radial-gradient(ellipse 400px 300px at 50% 50%,rgba(255,217,61,.05) 0%,transparent 70%);}
+.screen{display:none;position:relative;z-index:1;min-height:100vh;}
+.screen.active{display:flex;flex-direction:column;}
+
+/* ── LOGIN ── */
+#screen-login{align-items:center;justify-content:center;padding:24px;}
+.login-box{width:100%;max-width:420px;background:var(--card);border:1px solid var(--border);border-radius:24px;padding:36px 28px;box-shadow:0 24px 80px rgba(0,0,0,.5);animation:slideUp .5s ease;}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.login-logo{text-align:center;margin-bottom:28px;}
+.login-logo .logo-icon{font-size:3.5rem;display:block;animation:bounce 2s ease-in-out infinite;}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+.login-logo h1{font-family:'Fredoka One',cursive;font-size:2rem;background:linear-gradient(135deg,#ff6b6b,#ffd93d,#6bcb77);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-top:4px;}
+.login-logo p{color:var(--muted);font-size:.82rem;margin-top:4px;}
+.step{display:none;}.step.active{display:block;animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.form-label{display:block;font-size:.78rem;font-weight:800;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px;}
+.member-select-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:20px;}
+.member-option{background:var(--card2);border:2px solid var(--border);border-radius:14px;padding:14px 10px;text-align:center;cursor:pointer;transition:all .2s;}
+.member-option:hover{border-color:var(--accent2);transform:scale(1.02);}
+.member-option.selected{border-color:var(--accent2);background:rgba(255,217,61,.12);box-shadow:0 0 20px rgba(255,217,61,.2);}
+.mo-emoji{font-size:1.8rem;display:block;margin-bottom:4px;}.mo-name{font-weight:800;font-size:.85rem;}
+.admin-badge{display:inline-block;padding:1px 7px;border-radius:6px;background:rgba(255,107,107,.2);color:var(--accent1);font-size:.6rem;font-weight:800;margin-top:3px;}
+.form-input{width:100%;background:var(--card2);border:2px solid var(--border);border-radius:12px;padding:14px 16px;color:var(--text);font-family:'Nunito',sans-serif;font-size:.95rem;outline:none;transition:border-color .2s;margin-bottom:16px;}
+.form-input:focus{border-color:var(--accent2);}.form-input::placeholder{color:var(--muted);}
+.otp-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:16px;}
+.otp-box{background:var(--card2);border:2px solid var(--border);border-radius:12px;padding:14px 0;text-align:center;font-size:1.3rem;font-weight:900;color:var(--text);outline:none;transition:border-color .2s;width:100%;}
+.otp-box:focus{border-color:var(--accent2);box-shadow:0 0 12px rgba(255,217,61,.2);}
+.btn{width:100%;padding:15px;border-radius:14px;border:none;font-family:'Fredoka One',cursive;font-size:1.1rem;cursor:pointer;transition:all .2s;}
+.btn-primary{background:linear-gradient(135deg,var(--grad-a),var(--grad-b));color:#fff;box-shadow:0 4px 20px rgba(255,107,107,.3);margin-bottom:8px;}
+.btn-primary:hover:not(:disabled){transform:translateY(-2px);}.btn-primary:disabled{opacity:.5;cursor:not-allowed;}
+.btn-ghost{background:var(--card2);color:var(--muted);border:1px solid var(--border);font-family:'Nunito',sans-serif;font-size:.85rem;font-weight:700;padding:12px;}
+.btn-ghost:hover{color:var(--text);}
+.error-msg{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.3);border-radius:10px;padding:10px 14px;font-size:.8rem;color:var(--red);margin-bottom:12px;display:none;}
+.success-msg{background:rgba(107,203,119,.12);border:1px solid rgba(107,203,119,.3);border-radius:10px;padding:10px 14px;font-size:.8rem;color:var(--green);margin-bottom:12px;display:none;}
+.timer-text{text-align:center;font-size:.78rem;color:var(--muted);margin-bottom:12px;}
+.timer-text span{color:var(--accent2);font-weight:800;}
+
+/* ── APP ── */
+#screen-app{padding-bottom:80px;}
+.app-header{background:linear-gradient(135deg,var(--header-grad-a),var(--header-grad-b));border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;flex-wrap:wrap;row-gap:8px;}
+.app-header h2{font-family:'Fredoka One',cursive;font-size:1.3rem;background:linear-gradient(135deg,#ff6b6b,#ffd93d);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.app-header p{font-size:.7rem;color:var(--muted);margin-top:1px;}
+.app-header{flex-wrap:nowrap;gap:8px;padding:10px 12px;}.app-header>div:first-child{flex:0 0 auto;min-width:0;white-space:nowrap;}.header-right{display:flex;align-items:center;gap:6px;flex:1 1 0;min-width:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:none;}.header-right::-webkit-scrollbar{display:none;}.header-right>*{flex:0 0 auto;white-space:nowrap;}
+.btn-admin-panel{background:linear-gradient(135deg,#b06aff,#4d96ff);color:#fff;border:none;border-radius:12px;padding:7px 14px;font-family:'Fredoka One',cursive;font-size:.82rem;cursor:pointer;letter-spacing:.3px;box-shadow:0 2px 12px rgba(176,106,255,.35);backdrop-filter:var(--surface-blur);-webkit-backdrop-filter:var(--surface-blur);}
+.btn-admin-panel:hover{transform:scale(1.03);}
+.user-pill{display:flex;align-items:center;gap:6px;background:var(--card2);border-radius:20px;padding:6px 10px;border:1px solid var(--border);cursor:pointer;}
+.av-sm{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.85rem;}
+.uname{font-size:.75rem;font-weight:800;}
+.page{display:none;padding:16px;}.page.active{display:block;animation:fadeIn .25s ease;}
+.section-title{font-family:'Fredoka One',cursive;font-size:1.25rem;color:var(--accent2);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.card{background:var(--card);border-radius:16px;border:1px solid var(--border);padding:16px;margin-bottom:12px;}
+.members-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px;}
+.member-card{background:var(--card2);border-radius:14px;border:1px solid var(--border);padding:14px 12px;text-align:center;}
+.member-card .av{width:44px;height:44px;border-radius:50%;margin:0 auto 8px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;}
+.member-card .mname{font-weight:800;font-size:.88rem;}.member-card .memail{font-size:.62rem;color:var(--muted);margin-top:2px;word-break:break-all;}
+.balance-row{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;margin-bottom:8px;border-left:4px solid transparent;background:var(--card2);}
+.balance-row.owes{border-color:var(--red);}.balance-row.clear{border-color:var(--green);}
+.b-left{display:flex;align-items:center;gap:10px;}.b-name{font-weight:800;font-size:.88rem;}.b-sub{font-size:.68rem;color:var(--muted);margin-top:2px;}
+.b-amt{font-weight:800;font-size:.95rem;}.b-amt.neg{color:var(--red);}.b-amt.pos{color:var(--green);}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.fg{margin-bottom:14px;}
+.fg label{display:block;font-size:.75rem;font-weight:800;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.4px;}
+.fg input,.fg select{width:100%;background:var(--card2);border:2px solid var(--border);border-radius:12px;padding:12px 14px;color:var(--text);font-family:'Nunito',sans-serif;font-size:.9rem;outline:none;transition:border-color .2s;}
+.fg input:focus,.fg select:focus{border-color:var(--accent2);}.fg select option{background:var(--card2);}
+.checkbox-group{display:flex;flex-wrap:wrap;gap:8px;}
+.cb-item{padding:7px 12px;border-radius:10px;cursor:pointer;border:2px solid var(--border);background:var(--card2);font-size:.78rem;font-weight:700;transition:all .15s;user-select:none;}
+.cb-item.on{border-color:var(--accent2);background:rgba(255,217,61,.1);color:var(--accent2);}
+.btn-add{width:100%;padding:14px;border-radius:14px;border:none;background:linear-gradient(135deg,var(--grad-pos-a),var(--grad-pos-b));color:#fff;font-family:'Fredoka One',cursive;font-size:1.05rem;cursor:pointer;transition:all .2s;box-shadow:0 4px 20px rgba(107,203,119,.25);}
+.btn-add:hover{transform:translateY(-2px);}
+.exp-item-card{background:var(--card2);border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;border:1px solid var(--border);animation:slideUp .2s ease;}
+.exp-name{font-weight:800;font-size:.88rem;}.exp-meta{font-size:.68rem;color:var(--muted);margin-top:2px;}
+.exp-amt{font-family:'Fredoka One',cursive;font-size:1.1rem;color:var(--accent2);text-align:right;}
+.exp-share{font-size:.68rem;color:var(--muted);text-align:right;}
+.btn-del{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.25);color:var(--red);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:.7rem;font-weight:700;transition:all .15s;margin-top:4px;display:block;}
+.btn-del:hover{background:rgba(255,107,107,.25);}
+.btn-edit{background:rgba(77,150,255,.12);border:1px solid rgba(77,150,255,.25);color:var(--accent4);border-radius:8px;padding:4px 8px;cursor:pointer;font-size:.7rem;font-weight:700;transition:all .15s;margin-top:4px;display:block;}
+.btn-edit:hover{background:rgba(77,150,255,.25);}
+.tbl{width:100%;border-collapse:collapse;font-size:.78rem;}
+.tbl th{background:var(--card2);padding:10px 8px;font-weight:800;color:var(--accent2);border-bottom:2px solid var(--border);text-align:left;}
+.tbl td{padding:10px 8px;border-bottom:1px solid var(--border);}
+.tbl tr:last-child td{border-bottom:none;}.tbl tr:hover td{background:rgba(255,255,255,.02);}
+.tag-r{color:var(--red);font-weight:700;}.tag-g{color:var(--green);font-weight:700;}.tag-y{color:var(--accent2);font-weight:700;}
+.settle-card{background:var(--card2);border-radius:14px;padding:16px;margin-bottom:10px;border:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.settle-from{font-weight:800;font-size:.9rem;}.settle-to{font-size:.72rem;color:var(--muted);}
+.settle-amt{font-family:'Fredoka One',cursive;font-size:1.3rem;color:var(--accent1);}
+.info-box{background:rgba(77,150,255,.08);border:1px solid rgba(77,150,255,.25);border-radius:12px;padding:10px 14px;margin-bottom:14px;font-size:.78rem;color:var(--accent4);line-height:1.6;}
+.month-bar{display:flex;align-items:center;justify-content:space-between;background:var(--card2);border-radius:12px;padding:10px 16px;margin-bottom:14px;border:1px solid var(--border);}
+.month-bar span{font-weight:800;font-size:.9rem;color:var(--accent4);}
+.month-nav{background:none;border:none;color:var(--muted);font-size:1.2rem;cursor:pointer;padding:0 4px;}
+.month-nav:hover{color:var(--text);}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:rgba(19,19,42,.97);border-top:1px solid var(--border);display:flex;justify-content:space-around;padding:8px 0 12px;z-index:100;backdrop-filter:blur(10px);}
+.nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:4px 14px;border-radius:12px;font-size:.6rem;font-weight:800;color:var(--muted);transition:all .2s;border:none;background:transparent;}
+.nav-btn.active{color:var(--accent2);}.nav-btn .ni{font-size:1.25rem;}
+.empty{text-align:center;padding:40px 20px;color:var(--muted);}.empty .ei{font-size:3rem;margin-bottom:12px;}.empty p{font-size:.85rem;}
+.divider{height:1px;background:var(--border);margin:14px 0;}
+.loader{display:inline-block;width:18px;height:18px;border:3px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.demo-banner{background:linear-gradient(135deg,rgba(255,217,61,.1),rgba(255,146,43,.1));border:1px solid rgba(255,217,61,.25);border-radius:14px;padding:14px 16px;margin-bottom:16px;}
+.demo-banner h4{font-family:'Fredoka One',cursive;color:var(--accent2);margin-bottom:6px;}
+.demo-banner p{font-size:.75rem;color:var(--muted);line-height:1.6;}
+.demo-banner code{background:var(--card);border-radius:6px;padding:2px 6px;font-size:.72rem;color:var(--accent4);}
+
+/* ── ADMIN PANEL OVERLAY ── */
+#admin-overlay{display:none;position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);overflow-y:auto;}
+#admin-overlay.open{display:block;animation:fadeIn .2s ease;}
+.admin-panel{max-width:480px;margin:0 auto;min-height:100vh;background:var(--bg);padding:0 0 40px;}
+.admin-header{background:linear-gradient(135deg,var(--header-grad-a),var(--header-grad-b));padding:16px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;border-bottom:1px solid var(--border);}
+.admin-header h2{font-family:'Fredoka One',cursive;font-size:1.3rem;background:linear-gradient(135deg,#b06aff,#4d96ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.btn-close{background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:7px 14px;cursor:pointer;font-weight:700;font-size:.85rem;}
+.btn-close:hover{color:var(--text);}
+.admin-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0;overflow-x:auto;scrollbar-width:none;}
+.admin-tabs::-webkit-scrollbar{display:none;}
+.admin-tab{flex-shrink:0;padding:12px 18px;font-size:.82rem;font-weight:800;cursor:pointer;color:var(--muted);border-bottom:3px solid transparent;transition:all .2s;background:transparent;border-top:none;border-left:none;border-right:none;}
+.admin-tab.active{color:var(--purple);border-bottom-color:var(--purple);}
+.admin-content{padding:16px;}
+.admin-section{display:none;}.admin-section.active{display:block;}
+
+/* Member edit card */
+.member-edit-card{background:var(--card2);border-radius:14px;border:1px solid var(--border);padding:14px;margin-bottom:12px;}
+.member-edit-top{display:flex;align-items:center;gap:12px;margin-bottom:12px;}
+.member-big-av{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;}
+.member-edit-name{font-weight:800;font-size:.95rem;}
+.member-edit-role{font-size:.7rem;color:var(--muted);margin-top:2px;}
+.edit-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.edit-inp{width:100%;background:var(--card);border:1.5px solid var(--border);border-radius:10px;padding:9px 12px;color:var(--text);font-family:'Nunito',sans-serif;font-size:.82rem;outline:none;transition:border-color .2s;}
+.edit-inp:focus{border-color:var(--purple);}
+.edit-label{font-size:.68rem;font-weight:800;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;}
+.btn-save-member{width:100%;padding:10px;border-radius:10px;border:none;background:linear-gradient(135deg,#b06aff,#4d96ff);color:#fff;font-family:'Fredoka One',cursive;font-size:.9rem;cursor:pointer;margin-top:4px;}
+.btn-save-member:hover{transform:translateY(-1px);}
+
+/* Expense edit */
+.exp-edit-card{background:var(--card2);border-radius:12px;border:1px solid var(--border);padding:12px;margin-bottom:10px;}
+.exp-edit-title{font-weight:800;font-size:.88rem;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+.exp-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+.exp-edit-full{margin-bottom:8px;}
+.btn-save-exp{padding:8px 16px;border-radius:10px;border:none;background:linear-gradient(135deg,#6bcb77,#4d96ff);color:#fff;font-family:'Fredoka One',cursive;font-size:.82rem;cursor:pointer;margin-right:6px;}
+.btn-del-exp{padding:8px 14px;border-radius:10px;border:none;background:rgba(255,107,107,.15);color:var(--red);font-weight:800;font-size:.8rem;cursor:pointer;border:1px solid rgba(255,107,107,.3);}
+
+@media(min-width:480px){
+  #screen-app{max-width:480px;margin:0 auto;}
+  .bottom-nav,.admin-panel{max-width:480px;left:50%;transform:translateX(-50%);}
+  .bottom-nav{left:50%;}
+  #admin-overlay .admin-panel{margin:0 auto;}
+}
+
+.dhs {
+  display:inline-flex;
+  align-items:center;
+  font-size:.92em;
+  font-weight:900;
+  line-height:1;
+  margin-right:1px;
+  position:relative;
+  top:0px;
+}
+.dhs svg {
+  width:.85em;
+  height:.85em;
+  vertical-align:middle;
+  fill:currentColor;
+  display:inline-block;
+}
+
+/* v7.8 header drawer + bell */
+.hamb{flex:0 0 auto;width:40px;height:40px;border-radius:13px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-size:1.25rem;cursor:pointer;}
+.hd-title{flex:1 1 auto;min-width:0;}.hd-title h2{font-size:1.05rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}.hd-title p{font-size:.64rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.app-header{gap:10px!important;box-sizing:border-box;max-width:100%;}.app-header .header-right{flex:0 0 auto!important;overflow:visible!important;gap:6px!important;margin-left:auto;}
+.uname{max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}.user-pill{flex:0 0 auto;}
+/* v8.0: ONLY <html> clips sideways. Before, html AND body were both overflow-x:hidden, which turned <body> into a scroll
+   container and silently broke position:sticky on the app header. */
+html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
+.drawer-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:900;}.drawer-scrim.open{display:block;}
+.drawer{position:fixed;top:0;bottom:0;left:0;width:min(290px,84vw);transform:translateX(-105%);transition:transform .25s ease;z-index:901;background:var(--card);border-right:1px solid var(--border);padding:14px;overflow-y:auto;box-shadow:12px 0 40px rgba(0,0,0,.4);}
+.drawer.open{transform:none;}.drawer-head{display:flex;justify-content:space-between;align-items:center;font-family:'Fredoka One',cursive;font-size:1.2rem;margin-bottom:10px;}
+.drawer-head button{background:var(--card2);border:1px solid var(--border);color:var(--text);border-radius:10px;width:34px;height:34px;cursor:pointer;}
+.drawer-sec{font-size:.65rem;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin:14px 4px 6px;font-weight:800;}
+.drawer-item{display:block;width:100%;box-sizing:border-box;text-align:left;text-decoration:none;background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:13px;padding:12px 14px;margin-bottom:7px;font-family:'Fredoka One',cursive;font-size:.92rem;cursor:pointer;}
+.notif-wrap{position:relative;}.notif-bell{background:var(--card2);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:1rem;cursor:pointer;position:relative;color:var(--text);}
+.notif-badge{position:absolute;top:-4px;right:-4px;background:#ff6b6b;color:#fff;border-radius:10px;min-width:16px;height:16px;font-size:.6rem;display:none;align-items:center;justify-content:center;padding:0 4px;font-weight:800;}
+.ntf-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:940;}.ntf-scrim.open{display:block;}
+.ntf-panel{display:none;position:fixed;top:64px;left:12px;right:12px;margin:0 auto;width:min(380px,calc(100vw - 24px));max-height:min(70vh,480px);overflow-y:auto;z-index:950;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px;box-shadow:0 16px 40px rgba(0,0,0,.45);}.ntf-panel.open{display:block;}
+.ntf-row{padding:9px 8px;border-radius:10px;margin-bottom:4px;font-size:.78rem;cursor:pointer;}.ntf-row.unread{background:rgba(77,150,255,.14);}.ntf-row small{color:var(--muted);font-size:.64rem;}
+/* v8.0 iFiNeX branding */
+.login-logo .logo-img{width:84px;height:84px;display:block;margin:0 auto 6px;filter:drop-shadow(0 6px 18px rgba(77,150,255,.35));}
+.hd-logo{width:38px;height:38px;vertical-align:middle;margin-right:6px;border-radius:50%;}.hd-word{height:32px;width:auto;vertical-align:middle;border-radius:8px;}.hd-title h2{display:flex;align-items:center;}
+</style>
+</head>
+<body>
+<div id="theme-fx-layer"></div>
+<div id="bg-photo-layer"></div>
+<div class="bg-mesh"></div>
+
+<!-- ═══════ LOGIN ═══════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-box">
+    <div class="login-logo">
+      <img class="logo-img" src="assets/ifinex-emblem-192.png" alt="" width="104" height="104" style="width:104px;height:104px;border-radius:50%;"><img src="assets/ifinex-wordmark.png" alt="iFiNeX" style="width:230px;max-width:72%;display:block;margin:6px auto 0;border-radius:12px;">
+      <h1>iFiNeX</h1>
+      <p>Squad Split · track • split • settle with your crew  •  🇦🇪 AED</p>
+      <p style='font-size:.65rem;color:#444466;margin-top:2px'>v8.2</p>
+    </div>
+    <div id="step-1" class="step active">
+      <label class="form-label">📧 Your Email Address</label>
+      <input type="email" id="email-input" class="form-input" placeholder="youremail@gmail.com" />
+      <div id="err2" class="error-msg"></div>
+      <div id="succ2" class="success-msg"></div>
+      <button class="btn btn-primary" id="btn-send-otp" onclick="sendOTP()">📨 Send OTP</button>
+      <p style="text-align:center;font-size:.68rem;color:var(--muted);margin-top:12px;">One login for everything — Squad Split and your personal Bill Tracker.</p>
+    </div>
+    <div id="step-2" class="step">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:2.5rem">📬</div>
+        <div style="font-weight:800;margin-top:8px;font-size:.9rem" id="otp-sent-to"></div>
+        <div style="font-size:.75rem;color:var(--muted);margin-top:4px">Enter the 6-digit code sent to your email</div>
+      </div>
+      <div class="otp-grid" id="otp-grid"></div>
+      <div id="err3" class="error-msg"></div>
+      <div class="timer-text" id="timer-text"></div>
+      <button class="btn btn-primary" id="btn-verify" onclick="verifyOTP()">✅ Verify & Enter App</button>
+      <button class="btn btn-ghost" id="btn-resend" onclick="resendOTP()" disabled>🔄 Resend OTP</button>
+      <button class="btn btn-ghost" onclick="showStep(1)" style="margin-top:6px;">← Use a different email</button>
+      <div style="background:rgba(255,217,61,.08);border:1px solid rgba(255,217,61,.25);border-radius:12px;padding:12px 14px;margin-top:14px;font-size:.72rem;color:var(--muted);line-height:1.5;">
+        📭 <b style="color:var(--accent2);">Don't see it after a minute?</b> Check your Spam / Junk folder — look for a sender named <b>"iFiNeX"</b> (or <b>"Squad Splitter"</b>). Found it there? Tap <b>Not Spam / Not Junk</b> once — every code after that arrives much faster.
+      </div>
+    </div>
+    <div id="step-3" class="step">
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:2.5rem">🔒</div>
+        <div style="font-weight:800;margin-top:8px;">Not added yet</div>
+        <div style="font-size:.8rem;color:var(--muted);margin-top:6px;">This email hasn't been added by an admin. Ask your admin to add you first.</div>
+      </div>
+      <button class="btn btn-ghost" onclick="showStep(1)">← Try another email</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════ MAIN APP ═══════ -->
+<div id="screen-app" class="screen">
+  <div class="app-header">
+    <button class="hamb" onclick="openDrawer()" aria-label="Menu">☰</button>
+    <div class="hd-title"><h2><img class="hd-logo" src="assets/ifinex-emblem-192.png" alt="" width="38" height="38"><img class="hd-word" src="assets/ifinex-wordmark.png" alt="iFiNeX" height="32"></h2><p id="header-sub">Loading...</p></div>
+    <div class="header-right">
+      <div class="notif-wrap"><button class="notif-bell" onclick="toggleNtf()" aria-label="Notifications">🔔<span class="notif-badge" id="ntf-badge"></span></button></div>
+      <div class="user-pill" onclick="logout()" title="Tap to log out">
+        <div class="av-sm" id="hdr-av"></div>
+        <div class="uname" id="hdr-name"></div>
+        <div style="font-size:.7rem;color:var(--muted)">⏻</div>
+      </div>
+    </div>
+  </div>
+  <div class="ntf-scrim" id="ntf-scrim" onclick="toggleNtf()"></div>
+  <div class="ntf-panel" id="ntf-panel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><b>🔔 Notifications</b><button class="btn-tiny" onclick="readAllNtf()" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:.65rem;cursor:pointer;">Mark all read</button></div><div id="ntf-list"></div></div>
+  <div class="drawer-scrim" id="drawer-scrim" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head">Menu <button onclick="closeDrawer()">✕</button></div>
+    <div class="drawer-sec">Modules</div>
+    <button class="drawer-item" onclick="closeDrawer()">💸 Squad Split</button>
+    <a class="drawer-item" href="bill-tracker.html">🧾 Bill Tracker</a>
+    <a class="drawer-item" href="bill-tracker.html#et">🧮 Expense Tracker</a>
+    <div class="drawer-sec">Settings</div>
+    <a class="drawer-item" href="bill-tracker.html#theme">🎨 Theme &amp; background</a>
+    <a class="drawer-item" href="bill-tracker.html#alerts">🔔 Alerts &amp; notifications</a>
+    <button id="btn-admin-panel" class="drawer-item" onclick="closeDrawer();openAdmin()" style="display:none;">⚙️ Admin</button>
+    <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
+  </aside>
+
+  <!-- HOME -->
+  <div id="page-home" class="page active">
+    <div id="demo-notice" style="display:none;"></div>
+    <div class="section-title">👥 The Squad</div>
+    <div class="members-grid" id="squad-grid"></div>
+    <div class="section-title">📅 Expenses</div>
+    <div class="month-bar">
+      <button class="month-nav" onclick="changeMonth(-1)">‹</button>
+      <span id="month-label"></span>
+      <button class="month-nav" onclick="changeMonth(1)">›</button>
+    </div>
+    <div id="expense-list"></div>
+  </div>
+
+  <!-- ADD -->
+  <div id="page-add" class="page">
+    <div class="section-title">➕ Add Expense</div>
+    <div class="card">
+      <div class="form-row">
+        <div class="fg"><label>📝 Name</label><input type="text" id="inp-name" placeholder="Fuel, Food..." /></div>
+        <div class="fg"><label>💰 💰 <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span> Amount</label><input type="number" id="inp-amount" placeholder="0" /></div>
+      </div>
+      <div class="form-row">
+        <div class="fg"><label>👤 Paid By</label><select id="inp-paidby"></select></div>
+        <div class="fg"><label>📅 Date</label><input type="date" id="inp-date" /></div>
+      </div>
+      <div class="fg"><label>👥 Split Between</label><div class="checkbox-group" id="split-group"></div></div>
+      <div class="fg"><label>📁 Category</label>
+        <select id="inp-category">
+          <option value="food">🍔 Food</option><option value="fuel">⛽ Fuel</option>
+          <option value="workshop">🔧 Workshop</option><option value="market">🛒 Market</option>
+          <option value="drinks">🧃 Drinks</option><option value="maintenance">🔩 Maintenance</option>
+          <option value="other">📦 Other</option>
+        </select>
+      </div>
+      <button class="btn-add" onclick="addExpense()">💸 Add Expense</button>
+    </div>
+  </div>
+
+  <!-- BALANCES -->
+  <div id="page-balances" class="page">
+    <div class="section-title">📊 Balance Summary</div>
+    <div class="info-box">💡 Positive = others owe you &nbsp;|&nbsp; Negative = you owe others</div>
+    <div class="month-bar">
+      <button class="month-nav" onclick="changeMonth(-1)">‹</button>
+      <span id="month-label-2"></span>
+      <button class="month-nav" onclick="changeMonth(1)">›</button>
+    </div>
+    <div class="card" style="overflow-x:auto;"><table class="tbl" id="balance-tbl"></table></div>
+    <div class="section-title">⚖️ Net Per Person</div>
+    <div id="net-list"></div>
+  </div>
+
+  <!-- SETTLE -->
+  <div id="page-settle" class="page">
+    <div class="section-title">✅ Suggested Settlements</div>
+    <div class="info-box">🎯 Minimum transactions to clear all debts this month</div>
+    <div class="month-bar">
+      <button class="month-nav" onclick="changeMonth(-1)">‹</button>
+      <span id="month-label-3"></span>
+      <button class="month-nav" onclick="changeMonth(1)">›</button>
+    </div>
+    <div id="settle-list"></div>
+
+    <button class="btn-add" id="btn-email-squad-report" style="background:linear-gradient(135deg,#4d96ff,#b06aff);margin:6px 0 8px;" onclick="emailSquadReport()">📧 Email Me This Month's Report</button>
+
+    <div class="section-title" style="margin-top:8px;">💳 Record a Payment</div>
+    <div class="info-box">When someone actually pays — record it here to update balances</div>
+    <div class="card">
+      <div class="form-row">
+        <div class="fg"><label>Who Paid</label><select id="settle-from"></select></div>
+        <div class="fg"><label>Paid To</label><select id="settle-to"></select></div>
+      </div>
+      <div class="fg"><label>💰 <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span> Amount</label><input type="number" id="settle-amount" placeholder="0" /></div>
+      <button class="btn-add" onclick="recordSettlement()">✅ Record Settlement</button>
+    </div>
+
+    <div class="section-title" style="margin-top:8px;">📋 Settlement History</div>
+    <div id="settlements-history"></div>
+
+    <div class="section-title" style="margin-top:8px;">📜 Previous Balances</div>
+    <div class="info-box">Carried forward balances from prior months</div>
+    <div id="prev-list"></div>
+    <div id="admin-prev-section" style="display:none;">
+      <div class="section-title">➕ Add Previous Balance</div>
+      <div class="card">
+        <div class="form-row">
+          <div class="fg"><label>From</label><select id="pb-from"></select></div>
+          <div class="fg"><label>To</label><select id="pb-to"></select></div>
+        </div>
+        <div class="fg"><label>💰 <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span> Amount</label><input type="number" id="pb-amount" placeholder="0" /></div>
+        <button class="btn-add" onclick="addPrevBal()">Add Balance</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <button class="nav-btn active" onclick="showPage('home',this)"><span class="ni">🏠</span>Home</button>
+    <button class="nav-btn" onclick="showPage('add',this)"><span class="ni">➕</span>Add</button>
+    <button class="nav-btn" onclick="showPage('balances',this)"><span class="ni">⚖️</span>Balances</button>
+    <button class="nav-btn" onclick="showPage('settle',this)"><span class="ni">✅</span>Settle</button>
+    <button class="nav-btn" onclick="ifxXfer.open('sq_expenses')"><span class="ni">⇅</span>Excel</button>
+  </div>
+</div>
+
+<!-- ═══════ ADMIN PANEL OVERLAY ═══════ -->
+<div id="admin-overlay">
+  <div class="admin-panel">
+    <div class="admin-header">
+      <div>
+        <h2>⚙️ Admin Panel</h2>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:2px;">👑 Khan — Full Control</div>
+      </div>
+      <button class="btn-close" onclick="closeAdmin()">✕ Close</button>
+    </div>
+    <div class="admin-tabs">
+      <button class="admin-tab active" onclick="adminTab('members',this)">👥 Members</button>
+      <button class="admin-tab" onclick="adminTab('expenses',this)">💸 Expenses</button>
+      <button class="admin-tab" onclick="adminTab('balances',this)">⚖️ Balances</button>
+    </div>
+    <div class="admin-content">
+
+      <!-- MEMBERS TAB -->
+      <div id="atab-members" class="admin-section active">
+        <div class="info-box" style="margin-bottom:16px;">✏️ Edit member names, emails and emojis. Changes apply immediately.</div>
+        <div id="member-edit-list"></div>
+      </div>
+
+      <!-- EXPENSES TAB -->
+      <div id="atab-expenses" class="admin-section">
+        <div class="info-box">✏️ Edit or delete any expense. Changes recalculate all balances instantly.</div>
+        <div class="month-bar" style="margin-bottom:12px;">
+          <button class="month-nav" onclick="changeMonth(-1);renderAdminExpenses()">‹</button>
+          <span id="admin-month-label"></span>
+          <button class="month-nav" onclick="changeMonth(1);renderAdminExpenses()">›</button>
+        </div>
+        <div id="admin-expense-list"></div>
+      </div>
+
+      <!-- BALANCES TAB -->
+      <div id="atab-balances" class="admin-section">
+        <div class="info-box">✏️ Edit previous balances — who owes whom and how much.</div>
+        <div id="admin-balance-list"></div>
+        <div class="section-title" style="margin-top:8px;font-size:1rem;">➕ Add Previous Balance</div>
+        <div class="card">
+          <div class="edit-row">
+            <div><div class="edit-label">From</div><select class="edit-inp" id="apb-from"></select></div>
+            <div><div class="edit-label">To</div><select class="edit-inp" id="apb-to"></select></div>
+          </div>
+          <div style="margin-bottom:10px;"><div class="edit-label"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span> Amount</div><input type="number" class="edit-inp" id="apb-amount" placeholder="0" style="width:100%;" /></div>
+          <button class="btn-save-member" onclick="adminAddPrevBal()" style="margin-top:0;">➕ Add Balance</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CONFIG ─────────────────────────────────
+const SUPABASE_URL = 'https://lznnetxeklmdrykxtsbm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6bm5ldHhla2xtZHJ5a3h0c2JtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTIxMDMsImV4cCI6MjA4ODk4ODEwM30.cD_n9iCvTTkwgtwh2Qt8Ux9iJR2OfkgCutC2eif8JQo';
+
+const DEFAULT_MEMBERS = [
+  {id:'khan',    name:'Khan',       email:'',emoji:'👑',color:'#4d96ff',isAdmin:true },
+  {id:'kaatuva', name:'Kaatuva',   email:'',emoji:'🔥',color:'#ff6b6b',isAdmin:false},
+  {id:'naina',   name:'Naina',     email:'',emoji:'💫',color:'#ff92d0',isAdmin:false},
+  {id:'asif',    name:'Asif Bidni',email:'',emoji:'⚡',color:'#ffd93d',isAdmin:false},
+  {id:'niyaz',   name:'Niyaz',     email:'',emoji:'🌿',color:'#6bcb77',isAdmin:false},
+];
+
+const CAT_ICONS={food:'🍔',fuel:'⛽',workshop:'🔧',market:'🛒',drinks:'🧃',maintenance:'🔩',other:'📦'};
+const EMOJIS=['👑','🔥','💫','⚡','🌿','😎','🦁','🐯','🦊','🐺','🎯','🚀','💎','🏆','🎸','🌙','⭐','🎪','🏄','🎭'];
+const COLORS=['#4d96ff','#ff6b6b','#ff92d0','#ffd93d','#6bcb77','#b06aff','#ff922b','#4dd0e1','#ff6eb4','#a8ff78'];
+
+// ── STATE ───────────────────────────────────
+let sb=null,isDemoMode=true;
+let currentUser=null,selectedId=null,currentEmail='';
+// Read-only mirror of bill-tracker.html's Appearance feature — same
+// bill_user_prefs row, keyed by currentEmail, no UI to change it here.
+async function applyMyAppearance(){
+  try{
+    const { data } = await sb.from('bill_user_prefs').select('*').ilike('user_email', currentEmail).maybeSingle();
+    if(data?.theme && data.theme!=='default') document.documentElement.setAttribute('data-theme', data.theme);
+    if(data?.bg_url){ ifxBg.apply({url:data.bg_url,opacity:data.bg_opacity,zoom:data.bg_zoom,x:data.bg_x,y:data.bg_y}); }
+  }catch(e){ /* appearance is cosmetic — never block the app over it */ }
+}
+let timerInterval=null;
+function localDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function localMonthStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
+function escLike(s){ return String(s||'').replace(/[%_\\]/g,m=>'\\'+m); }
+// v8.1 SECURITY: escape & < > " ' (the old escapeHtml left quotes alone, which is unsafe inside HTML attributes)
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+// v8.1 SECURITY: text placed inside a JS string within an inline handler, e.g. onclick="del('${esc(jsq(name))}')"
+function jsq(s){ return String(s==null?'':s).replace(/[\\'"<>&\r\n\u2028\u2029]/g,c=>'\\x'+('0'+c.charCodeAt(0).toString(16)).slice(-2)); }
+let viewMonth=localMonthStr(new Date());
+let MEMBERS=[];
+let expenses=[],prevBals=[],settlements=[];
+// If a delegate arrives here via a link from Bill Tracker while managing
+// someone else's account, that page passes ?as=<their email> so this page
+// can show THAT member's Squad Split view instead of the delegate's own
+// (which usually doesn't exist as a squad member at all). Verified against
+// the database below before ever being trusted.
+const IMPERSONATE_PARAM = new URLSearchParams(location.search).get('as');
+
+// ── SUPABASE TABLES NEEDED ──────────────────
+// expenses, prev_balances, settlements, members_config
+
+// ── INIT ────────────────────────────────────
+window.onload=async()=>{
+ try{
+  if(SUPABASE_URL!=='YOUR_SUPABASE_URL'){
+    // Explicit, matching auth config — MUST equal bill-tracker.html's so a
+    // session started on either page is recognized on the other.
+    try{
+      sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{
+        auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storageKey:'squadsplit-auth-v1', storage:window.IFX_AUTH_STORAGE }
+      });
+      isDemoMode=false;
+    }catch(e){isDemoMode=true;}
+  }
+  try{ await loadMembers(); }catch(e){}  // v8.1: private now — this only succeeds for an already signed-in visitor
+  buildOTPBoxes();
+  // Security: never trust a cached "who's logged in" blob on its own — a
+  // stale copy could show wrong admin status if permissions changed since.
+  // The only real source of truth is a live, currently-valid Supabase
+  // session, re-checked fresh against the database every single load.
+  if(!isDemoMode&&sb){
+    // v8.3 persistent login — see ifinex-session.js
+    ifxBootSplash('Restoring your session…');
+    const R = await ifxRestoreSession(sb);
+    if(R.session?.user?.email){
+      currentEmail=R.session.user.email.toLowerCase();
+      applyMyAppearance();
+      try{ await routeAfterLogin(true); ifxBootHide(); }
+      catch(e){ console.warn('Enter failed',e); ifxBootOffline(()=>location.reload(), e&&e.message); }
+      return;
+    }
+    if(R.offline){ ifxBootOffline(()=>location.reload(), R.error&&R.error.message); return; }
+    ifxBootHide();
+    sessionStorage.removeItem('sq_user'); // no live session — any old cache is meaningless
+    return;
+  }
+  // Demo mode only (no real backend to re-verify against)
+  const s=sessionStorage.getItem('sq_user');
+  if(s){currentUser=JSON.parse(s);await enterApp();}
+ }catch(e){
+   console.error('Startup error:', e); try{ ifxBootOffline(()=>location.reload(), e&&e.message); }catch(x){}
+ }
+};
+
+// ── MEMBER CONFIG — persisted in Supabase OR localStorage ──
+async function loadMembers(){
+  if(!isDemoMode&&sb){
+    try{
+      const{data}=await sb.from('members_config').select('*').order('sort_order');
+      if(data&&data.length>0){MEMBERS=data.map(r=>({...r,isAdmin:r.is_admin}));return;}
+    }catch(e){}
+  }
+  // fallback: localStorage
+  const saved=localStorage.getItem('sq_members_v2');
+  MEMBERS=saved?JSON.parse(saved):[...DEFAULT_MEMBERS.map(m=>({...m}))];
+}
+
+async function saveMembers(){
+  localStorage.setItem('sq_members_v2',JSON.stringify(MEMBERS));
+  if(!isDemoMode&&sb){
+    try{
+      await sb.from('members_config').delete().neq('id','__none__');
+      await sb.from('members_config').insert(MEMBERS.map((m,i)=>({
+        id:m.id,name:m.name,email:m.email||'',emoji:m.emoji,
+        color:m.color,is_admin:m.isAdmin||false,sort_order:i
+      })));
+    }catch(e){console.log('members_config save err',e);}
+  }
+}
+
+function saveMembersLocal(){
+  localStorage.setItem('sq_members_v2',JSON.stringify(MEMBERS));
+}
+
+// ── LOGIN ───────────────────────────────────
+function renderMemberGrid(){
+  document.getElementById('member-grid').innerHTML=MEMBERS.map(m=>`
+    <div class="member-option" data-id="${esc(m.id)}" onclick="pickMember('${esc(jsq(m.id))}',this)">
+      <span class="mo-emoji">${esc(m.emoji)}</span>
+      <div class="mo-name">${esc(m.name)}</div>
+      ${m.isAdmin?'<div><span class="admin-badge">👑 ADMIN</span></div>':''}
+    </div>`).join('');
+}
+function pickMember(id,el){
+  document.querySelectorAll('.member-option').forEach(e=>e.classList.remove('selected'));
+  el.classList.add('selected');selectedId=id;hideMsg('err1');
+}
+function goStep2(){
+  if(!selectedId){showErr('err1','⚠️ Please choose your name first!');return;}
+  const m=MEMBERS.find(x=>x.id===selectedId);
+  document.getElementById('sel-badge').innerHTML=`${m.emoji} ${m.name}${m.isAdmin?' <span class="admin-badge">ADMIN</span>':''}`;
+  // pre-fill email if known
+  if(m.email){document.getElementById('email-input').value=m.email;}
+  showStep(2);
+}
+function goStep1(){showStep(1);}
+
+async function sendOTP(){
+  const email=document.getElementById('email-input').value.trim();
+  if(!email||!email.includes('@')||!email.includes('.')){showErr('err2','⚠️ Please enter a valid email address');return;}
+  currentEmail=email;
+  const btn=document.getElementById('btn-send-otp');
+  btn.innerHTML='<span class="loader"></span> Sending...';btn.disabled=true;
+  hideMsg('err2');hideMsg('succ2');
+  if(isDemoMode){
+    setTimeout(()=>{
+      btn.innerHTML='📨 Send OTP';btn.disabled=false;
+      showSucc('succ2',`✅ OTP sent (Demo mode — use code: 123456)`);
+      setTimeout(()=>{showStep(2);document.getElementById('otp-sent-to').textContent=`Code sent to ${email}`;startTimer();},1200);
+    },800);return;
+  }
+  try{
+    const{data,error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:window.location.origin+window.location.pathname}});
+    console.log('OTP result:',{data,error});
+    btn.innerHTML='📨 Send OTP';btn.disabled=false;
+    if(error){showErr('err2','❌ '+error.message);return;}
+    showSucc('succ2',`✅ OTP sent to ${email}`);
+    setTimeout(()=>{showStep(2);document.getElementById('otp-sent-to').textContent=`Code sent to ${email}`;startTimer();},1200);
+  }catch(e){btn.innerHTML='📨 Send OTP';btn.disabled=false;showErr('err2','❌ Network error.');}
+}
+
+async function verifyOTP(){
+  const otp=[...document.querySelectorAll('.otp-box')].map(i=>i.value).join('');
+  if(otp.length<6){showErr('err3','⚠️ Enter all 6 digits');return;}
+  const btn=document.getElementById('btn-verify');
+  btn.innerHTML='<span class="loader"></span> Verifying...';btn.disabled=true;hideMsg('err3');
+  if(isDemoMode){
+    setTimeout(async()=>{btn.innerHTML='✅ Verify & Enter App';btn.disabled=false;
+      if(otp==='123456')await routeAfterLogin(false);
+      else showErr('err3','❌ Wrong code. Demo: use 123456');
+    },700);return;
+  }
+  try{
+    const{error}=await sb.auth.verifyOtp({email:currentEmail,token:otp,type:'email'});
+    btn.innerHTML='✅ Verify & Enter App';btn.disabled=false;
+    if(error){showErr('err3','❌ '+error.message);return;}
+    await routeAfterLogin(false);
+  }catch(e){btn.innerHTML='✅ Verify & Enter App';btn.disabled=false;showErr('err3','❌ Verification failed.');}
+}
+
+// ── ROUTE: decide Squad Split vs Bill Tracker vs not-registered ──
+// This is the single point that turns "a verified email" into "the right
+// screen" — looked up fresh from app_users every time, never guessed.
+async function routeAfterLogin(silent){
+  if(isDemoMode||!sb){
+    selectedId=MEMBERS[0]?.id||null;
+    if(selectedId)finishLogin();else if(!silent)showStep(3);
+    return;
+  }
+  await loadMembers(); // v8.1: the roster is only readable after sign-in, so (re)load it here
+  // If a delegate arrived here via a link from Bill Tracker while managing
+  // someone else's account, route using THAT account — but only once
+  // verified server-side that this login really does have delegate rights
+  // for it (never trust the URL param on its own).
+  let routeEmail = currentEmail, viewingAsDelegate = null;
+  if(IMPERSONATE_PARAM && IMPERSONATE_PARAM.toLowerCase()!==currentEmail){
+    const{data:delegateCheck}=await sb.from('app_users').select('email,name').ilike('email',escLike(IMPERSONATE_PARAM)).ilike('delegate_email',escLike(currentEmail)).maybeSingle();
+    if(delegateCheck){ routeEmail = IMPERSONATE_PARAM.toLowerCase(); viewingAsDelegate = delegateCheck.name; }
+  }
+  const{data,error}=await sb.from('app_users').select('*').ilike('email',escLike(routeEmail)).maybeSingle();
+  if(error) throw error;   // v8.3: a failed lookup (network) must not look like "not registered"
+  if(!data){
+    // Not registered under their own email — but they might still have
+    // delegate access to someone else's account. Don't dead-end on "not
+    // added yet" when Bill Tracker's picker can actually get them in.
+    if(!viewingAsDelegate){
+      const{data:delegated}=await sb.from('app_users').select('id').ilike('delegate_email',escLike(currentEmail)).limit(1);
+      if(delegated && delegated.length){
+        sessionStorage.setItem('bt_email',currentEmail.toLowerCase());
+        window.location.href='bill-tracker.html';
+        return;
+      }
+    }
+    if(!silent)showStep(3);
+    return;
+  }
+  if(data.group_type==='general'){
+    // Personal-only account — Squad Split has nothing to show them.
+    sessionStorage.setItem('bt_email',currentEmail.toLowerCase());
+    window.location.href='bill-tracker.html';
+    return;
+  }
+  // squad_split — find their matching squad roster entry by email.
+  const m=MEMBERS.find(x=>(x.email||'').toLowerCase()===routeEmail.toLowerCase());
+  if(!m){
+    if(!silent)showErr('err3','⚠️ Marked as a squad member but not yet on the squad roster — ask your admin to add you in Members, or use the My Tracker link for your personal tracker.');
+    return;
+  }
+  selectedId=m.id;
+  window._viewingAsDelegate = viewingAsDelegate;
+  finishLogin();
+}
+
+function finishLogin(){
+  const m=MEMBERS.find(x=>x.id===selectedId);
+  // Update email in members list — but never when we're viewing as a
+  // delegate, or this would overwrite the real member's email with the
+  // delegate's own.
+  if(m.email!==currentEmail && !window._viewingAsDelegate){m.email=currentEmail;saveMembersLocal();}
+  currentUser={...m};
+  if(window._viewingAsDelegate) currentUser._delegatedLabel = window._viewingAsDelegate;
+  sessionStorage.setItem('sq_user',JSON.stringify(currentUser));
+  clearInterval(timerInterval);enterApp();
+}
+
+async function resendOTP(){
+  document.querySelectorAll('.otp-box').forEach(b=>b.value='');
+  hideMsg('err3');document.getElementById('btn-resend').disabled=true;
+  await sendOTP();
+}
+function startTimer(){
+  let s=60;const el=document.getElementById('timer-text');const rb=document.getElementById('btn-resend');
+  rb.disabled=true;clearInterval(timerInterval);
+  timerInterval=setInterval(()=>{s--;el.innerHTML=`Resend in <span>${esc(s)}s</span>`;
+    if(s<=0){clearInterval(timerInterval);el.innerHTML='';rb.disabled=false;}},1000);
+}
+function buildOTPBoxes(){
+  document.getElementById('otp-grid').innerHTML=Array(6).fill(0).map((_,i)=>
+    `<input class="otp-box" maxlength="1" type="text" inputmode="numeric" id="ob${esc(i)}"
+      onkeyup="otpNav(this,${esc(i)})" oninput="this.value=this.value.replace(/[^0-9]/g,'')" />`).join('');
+}
+function otpNav(el,i){
+  if(el.value&&i<5)document.getElementById('ob'+(i+1)).focus();
+  if(!el.value&&i>0)document.getElementById('ob'+(i-1)).focus();
+}
+function showStep(n){
+  document.querySelectorAll('.step').forEach(s=>s.classList.remove('active'));
+  document.getElementById('step-'+n).classList.add('active');
+}
+
+// ── APP ENTRY ───────────────────────────────
+async function enterApp(){
+  document.getElementById('screen-login').classList.remove('active');
+  document.getElementById('screen-app').classList.add('active');
+  document.getElementById('hdr-name').textContent=currentUser.name;
+  document.getElementById('hdr-av').textContent=currentUser.emoji;
+  document.getElementById('header-sub').textContent=currentUser._delegatedLabel ? `Viewing as ${currentUser._delegatedLabel} (delegated)` : (currentUser.isAdmin?'👑 Admin Access':'👤 Member');
+  if(currentUser.isAdmin){
+    document.getElementById('btn-admin-panel').style.display='block';
+    document.getElementById('admin-prev-section').style.display='block';
+  }
+  // Load all data from Supabase
+  await loadAllData();
+  updateMonthLabels();
+  renderSquad();
+  initAddForm();
+  document.getElementById('inp-date').value=localDateStr(new Date());
+  refresh();
+  if(typeof ifxAlertsResume==='function') ifxAlertsResume(); // v8.0: bring native background alerts back after a login
+}
+
+async function loadAllData(){
+  if(!isDemoMode&&sb){
+    const[e,p,s]=await Promise.all([
+      sb.from('expenses').select('*').order('date',{ascending:false}),
+      sb.from('prev_balances').select('*'),
+      sb.from('settlements').select('*').order('created_at',{ascending:false}),
+    ]);
+    expenses=e.data||[];
+    prevBals=p.data||[];
+    settlements=s.data||[];
+  } else {
+    // Demo data
+    expenses=[
+      {id:1,name:'Fuel',amount:50,paid_by:'khan',split_between:['khan','kaatuva','naina','asif','niyaz'],date:'2026-03-07',category:'fuel',month:'2026-03'},
+      {id:2,name:'Fish',amount:80,paid_by:'khan',split_between:['khan','kaatuva','naina','asif','niyaz'],date:'2026-03-07',category:'food',month:'2026-03'},
+      {id:3,name:'Kabab',amount:65,paid_by:'kaatuva',split_between:['khan','kaatuva','naina','asif','niyaz'],date:'2026-03-07',category:'food',month:'2026-03'},
+      {id:4,name:'Juice',amount:15,paid_by:'kaatuva',split_between:['khan','kaatuva','naina','asif','niyaz'],date:'2026-03-07',category:'drinks',month:'2026-03'},
+      {id:5,name:'Workshop',amount:100,paid_by:'niyaz',split_between:['khan','kaatuva','naina','asif','niyaz'],date:'2026-03-07',category:'workshop',month:'2026-03'},
+    ];
+    prevBals=[
+      {id:1,from_member:'kaatuva',to_member:'khan',amount:685,month:'2026-02'},
+      {id:2,from_member:'naina',to_member:'khan',amount:65,month:'2026-02'},
+      {id:3,from_member:'asif',to_member:'khan',amount:256,month:'2026-02'},
+      {id:4,from_member:'niyaz',to_member:'khan',amount:130,month:'2026-02'},
+    ];
+    settlements=[];
+  }
+}
+
+// v8.0: the admin expense editor's split checkboxes call this, but it was never defined (a console ReferenceError on every tick).
+// The split is read from the ticked boxes when you press Save, so there is nothing to do per click.
+function updateExpSplit(){}
+// v8.0 FIX: logout used to leave the Supabase session alive, so a reload logged you straight back in. It now really signs out and,
+// in the Android app, first forgets this phone's background-alert secret while the session still exists.
+async function logout(){
+  if(!confirm('Log out?'))return;
+  try{ if(typeof ifxAlertsDisable==='function') await ifxAlertsDisable(true,true); }catch(e){}
+  try{ if(sb) await sb.auth.signOut(); }catch(e){ console.warn('signOut',e); }
+  sessionStorage.removeItem('sq_user');currentUser=null;
+  document.getElementById('screen-app').classList.remove('active');
+  document.getElementById('screen-login').classList.add('active');
+  showStep(1);document.querySelectorAll('.member-option').forEach(e=>e.classList.remove('selected'));
+  selectedId=null;
+}
+
+function refresh(){
+  updateMonthLabels();
+  renderExpenses();
+  renderBalances();
+  renderSettlements();
+  renderPrevBals();
+  populatePrevBalDropdowns();
+}
+
+// ── MONTH ────────────────────────────────────
+function changeMonth(d){
+  const[y,m]=viewMonth.split('-').map(Number);
+  const nd=new Date(y,m-1+d,1);
+  viewMonth=nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0');
+  refresh();
+}
+function updateMonthLabels(){
+  const[y,m]=viewMonth.split('-').map(Number);
+  const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
+  ['month-label','month-label-2','month-label-3','admin-month-label'].forEach(id=>{
+    const e=document.getElementById(id);if(e)e.textContent=lbl;
+  });
+}
+function getPrevMonth(){
+  const[y,m]=viewMonth.split('-').map(Number);
+  const pd=new Date(y,m-2,1);
+  return pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
+}
+
+// ── SQUAD ─────────────────────────────────────
+function renderSquad(){
+  document.getElementById('squad-grid').innerHTML=MEMBERS.map(m=>`
+    <div class="member-card" onclick="showPersonDetail('${esc(jsq(m.id))}')">
+      <div class="av" style="background:${esc(m.color)}20;border:2px solid ${esc(m.color)}50">${esc(m.emoji)}</div>
+      <div class="mname">${esc(m.name)}</div>
+      ${m.isAdmin?'<span class="admin-badge">👑 Admin</span>':''}
+      <div class="memail">${esc(m.email)||'—'}</div>
+      <div style="margin-top:6px;font-size:.7rem;color:var(--accent4)">Tap for details →</div>
+    </div>`).join('');
+}
+
+// ── PERSON DETAIL MODAL ──────────────────────
+function showPersonDetail(memberId){
+  const m=MEMBERS.find(x=>x.id===memberId);
+  if(!m)return;
+  const allMonths=[...new Set([...expenses.map(e=>e.month),...prevBals.map(b=>b.month)])].sort().reverse();
+  
+  let html=`<div id="person-modal" style="position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.8);overflow-y:auto;backdrop-filter:blur(4px);">
+  <div style="max-width:480px;margin:20px auto;background:var(--card);border-radius:20px;border:1px solid var(--border);padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="font-size:2.5rem">${esc(m.emoji)}</div>
+        <div><div style="font-weight:800;font-size:1.1rem;color:${esc(m.color)}">${esc(m.name)}</div>
+        <div style="font-size:.72rem;color:var(--muted)">${esc(m.email)||'No email set'}</div></div>
+      </div>
+      <button onclick="document.getElementById('person-modal').remove()" style="background:var(--card2);border:1px solid var(--border);color:var(--muted);border-radius:10px;padding:6px 14px;cursor:pointer;font-weight:700;">✕</button>
+    </div>`;
+  
+  // Total net across ALL months
+  const totalNet=calcTotalNetForMember(memberId);
+  html+=`<div style="background:var(--card2);border-radius:14px;padding:14px;margin-bottom:16px;border:1px solid ${totalNet>=0?'rgba(107,203,119,.3)':'rgba(255,107,107,.3)'}">
+    <div style="font-size:.75rem;color:var(--muted);margin-bottom:4px;">OVERALL BALANCE</div>
+    <div style="font-family:'Fredoka One',cursive;font-size:1.8rem;color:${totalNet>=0?'var(--green)':'var(--red)'}">
+      ${totalNet>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(totalNet).toFixed(0))}</div>
+    <div style="font-size:.72rem;color:var(--muted);margin-top:2px">${totalNet>=0?'Gets back from squad':'Owes to squad'}</div>
+  </div>`;
+
+  // Month breakdown
+  html+=`<div style="font-family:'Fredoka One',cursive;font-size:1rem;color:var(--accent2);margin-bottom:10px;">📅 Monthly Breakdown</div>`;
+  
+  const activeMonths=allMonths.length>0?allMonths:[viewMonth];
+  activeMonths.forEach(month=>{
+    const monthExps=expenses.filter(e=>e.month===month);
+    const pm=getPrevMonthOf(month);
+    const monthPrevs=prevBals.filter(b=>b.month===pm);
+    const paid=monthExps.filter(e=>e.paid_by===memberId).reduce((s,e)=>s+e.amount,0);
+    const share=monthExps.reduce((s,e)=>e.split_between.includes(memberId)?s+e.amount/e.split_between.length:s,0);
+    const prevOwed=monthPrevs.reduce((s,b)=>b.from_member===memberId?s-b.amount:b.to_member===memberId?s+b.amount:s,0);
+    const monthSettled=settlements.filter(s=>s.month===month&&(s.from_member===memberId||s.to_member===memberId))
+      .reduce((s,t)=>t.from_member===memberId?s+t.amount:s-t.amount,0);
+    const net=paid-share+prevOwed+monthSettled;
+    if(paid===0&&share===0&&prevOwed===0)return;
+    
+    const[y,mo]=month.split('-').map(Number);
+    const mLabel=new Date(y,mo-1,1).toLocaleString('default',{month:'short',year:'numeric'});
+    html+=`<div style="background:var(--card2);border-radius:12px;padding:12px;margin-bottom:8px;border-left:3px solid ${net>=0?'var(--green)':'var(--red)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-weight:800;font-size:.85rem;color:var(--accent4)">${esc(mLabel)}</span>
+        <span style="font-family:'Fredoka One',cursive;color:${net>=0?'var(--green)':'var(--red)'}">${net>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(net).toFixed(0))}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:.72rem;">
+        <div style="color:var(--green)">💰 Paid: <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(paid.toFixed(0))}</div>
+        <div style="color:var(--red)">📊 Share: <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(share.toFixed(0))}</div>
+        <div style="color:${prevOwed>=0?'var(--green)':'var(--red)'}">📜 Prev: ${prevOwed>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(prevOwed).toFixed(0))}</div>
+        <div style="color:${monthSettled>=0?'var(--green)':'var(--red)'}">✅ Settled: ${monthSettled>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(monthSettled).toFixed(0))}</div>
+      </div>
+      <div style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px;">`;
+    
+    // Expense list for this month
+    const myExps=monthExps.filter(e=>e.split_between.includes(memberId)||e.paid_by===memberId);
+    myExps.slice(0,5).forEach(e=>{
+      const myShare=e.split_between.includes(memberId)?e.amount/e.split_between.length:0;
+      const iPaid=e.paid_by===memberId;
+      html+=`<div style="font-size:.68rem;display:flex;justify-content:space-between;padding:2px 0;color:var(--muted)">
+        <span>${esc(CAT_ICONS[e.category])||'📦'} ${esc(e.name)}</span>
+        <span>${iPaid?`<span style="color:var(--green)">+<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(e.amount)}</span>`:''} ${myShare>0?`<span style="color:var(--red)">-<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(myShare.toFixed(0))}</span>`:''}</span>
+      </div>`;
+    });
+    if(myExps.length>5)html+=`<div style="font-size:.65rem;color:var(--muted);margin-top:4px">+${esc(myExps.length-5)} more expenses...</div>`;
+    html+=`</div></div>`;
+  });
+
+  html+=`</div></div>`;
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+
+function calcTotalNetForMember(memberId){
+  let total=0;
+  expenses.forEach(e=>{
+    if(e.paid_by===memberId)total+=e.amount;
+    if(e.split_between.includes(memberId))total-=e.amount/e.split_between.length;
+  });
+  prevBals.forEach(b=>{
+    if(b.from_member===memberId)total-=b.amount;
+    if(b.to_member===memberId)total+=b.amount;
+  });
+  settlements.forEach(s=>{
+    if(s.from_member===memberId)total+=s.amount;
+    if(s.to_member===memberId)total-=s.amount;
+  });
+  return total;
+}
+
+function getPrevMonthOf(month){
+  const[y,m]=month.split('-').map(Number);
+  const pd=new Date(y,m-2,1);
+  return pd.getFullYear()+'-'+String(pd.getMonth()+1).padStart(2,'0');
+}
+
+// ── ADD FORM ──────────────────────────────────
+function initAddForm(){
+  document.getElementById('inp-paidby').innerHTML=MEMBERS.map(m=>`<option value="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
+  document.getElementById('inp-paidby').value=currentUser.id;
+  document.getElementById('split-group').innerHTML=MEMBERS.map(m=>`
+    <div class="cb-item on" data-id="${esc(m.id)}" onclick="this.classList.toggle('on')">${esc(m.emoji)} ${esc(m.name)}</div>`).join('');
+}
+
+async function addExpense(){
+  const name=document.getElementById('inp-name').value.trim();
+  const amount=parseFloat(document.getElementById('inp-amount').value);
+  const paid_by=document.getElementById('inp-paidby').value;
+  const date=document.getElementById('inp-date').value;
+  const category=document.getElementById('inp-category').value;
+  const split_between=[...document.querySelectorAll('#split-group .cb-item.on')].map(e=>e.dataset.id);
+  if(!name||!amount||!paid_by||!date||!split_between.length){alert('⚠️ Fill all fields!');return;}
+  const month=date.slice(0,7);
+  const exp={name,amount,paid_by,split_between,date,category,month};
+  if(!isDemoMode&&sb){
+    const{data,error}=await sb.from('expenses').insert([exp]).select();
+    if(error){alert('Error saving: '+error.message);return;}
+    expenses.push(data[0]);
+  } else {
+    exp.id=Date.now();expenses.push(exp);
+  }
+  document.getElementById('inp-name').value='';
+  document.getElementById('inp-amount').value='';
+  showToast('✅ Expense added!');
+  refresh();showPage('home',document.querySelector('.nav-btn'));
+}
+
+// ── EXPENSE LIST ──────────────────────────────
+function renderExpenses(){
+  const el=document.getElementById('expense-list');
+  const list=expenses.filter(e=>e.month===viewMonth);
+  if(!list.length){el.innerHTML=`<div class="empty"><div class="ei">🗒️</div><p>No expenses this month.<br>Tap ➕ to add!</p></div>`;return;}
+  const byDate={};
+  list.forEach(e=>{(byDate[e.date]=byDate[e.date]||[]).push(e);});
+  el.innerHTML=Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([date,exps])=>{
+    const dl=new Date(date+'T12:00').toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'});
+    const dt=exps.reduce((s,e)=>s+e.amount,0);
+    return`<div style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:.78rem;font-weight:800;color:var(--accent4)">📅 ${esc(dl)}</span>
+        <span style="font-size:.72rem;color:var(--muted)"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(dt)}</span>
+      </div>${exps.map(e=>expCard(e)).join('')}</div>`;
+  }).join('');
+}
+
+function expCard(e){
+  const payer=MEMBERS.find(m=>m.id===e.paid_by);
+  const snames=e.split_between.map(id=>MEMBERS.find(m=>m.id===id)?.name).filter(Boolean);
+  const share=(e.amount/e.split_between.length).toFixed(0);
+  const canEdit=currentUser?.isAdmin;
+  return`<div class="exp-item-card" data-ifx-k="x${esc(e.id)}" data-ifx-amt="${esc(e.amount)}" data-ifx-label="${esc(e.name)}" data-ifx-date="${esc(e.date)}">
+    <div style="font-size:1.5rem;margin-right:10px">${esc(CAT_ICONS[e.category])||'📦'}</div>
+    <div style="flex:1">
+      <div class="exp-name">${esc(e.name)}</div>
+      <div class="exp-meta">Paid by ${esc(payer?.emoji)} ${esc(payer?.name)} • ÷${esc(e.split_between.length)}</div>
+      <div class="exp-meta" style="color:var(--accent4)">${esc(snames.slice(0,3).join(', '))}${snames.length>3?` +${snames.length-3}`:''}</div>
+    </div>
+    <div>
+      <div class="exp-amt"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(e.amount)}</div>
+      <div class="exp-share"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(share)}/head</div>
+      ${canEdit?`<button class="btn-del" onclick="delExp('${esc(jsq(e.id))}')">🗑️</button>`:''}
+    </div>
+  </div>`;
+}
+
+async function delExp(id){
+  if(!currentUser?.isAdmin){alert('⛔ Admin only!');return;}
+  if(!confirm('Delete this expense?'))return;
+  if(!isDemoMode&&sb){
+    const{error}=await sb.from('expenses').delete().eq('id',id);
+    if(error){alert('Error: '+error.message);return;}
+  }
+  expenses=expenses.filter(e=>String(e.id)!==String(id));
+  refresh();
+}
+
+// ── CALC ──────────────────────────────────────
+function calcNet(exps,prevs,setts){
+  const net={};MEMBERS.forEach(m=>net[m.id]=0);
+  prevs.forEach(b=>{if(net[b.from_member]!==undefined)net[b.from_member]-=b.amount;if(net[b.to_member]!==undefined)net[b.to_member]+=b.amount;});
+  exps.forEach(e=>{
+    const sh=e.amount/e.split_between.length;
+    if(net[e.paid_by]!==undefined)net[e.paid_by]+=e.amount;
+    e.split_between.forEach(id=>{if(net[id]!==undefined)net[id]-=sh;});
+  });
+  // Apply settlements — from_member PAID, so their debt reduces (net goes up), to_member received, net goes down
+  (setts||[]).forEach(s=>{
+    if(net[s.from_member]!==undefined)net[s.from_member]+=s.amount;
+    if(net[s.to_member]!==undefined)net[s.to_member]-=s.amount;
+  });
+  return net;
+}
+
+function simplify(net){
+  const cr=[],dt=[];
+  Object.entries(net).forEach(([id,v])=>{if(v>0.01)cr.push({id,amount:v});else if(v<-0.01)dt.push({id,amount:-v});});
+  cr.sort((a,b)=>b.amount-a.amount);dt.sort((a,b)=>b.amount-a.amount);
+  const txns=[];let i=0,j=0;
+  while(i<cr.length&&j<dt.length){
+    const pay=Math.min(cr[i].amount,dt[j].amount);
+    if(pay>0.01)txns.push({from:dt[j].id,to:cr[i].id,amount:pay});
+    cr[i].amount-=pay;dt[j].amount-=pay;
+    if(cr[i].amount<0.01)i++;if(dt[j].amount<0.01)j++;
+  }
+  return txns;
+}
+
+// ── BALANCES PAGE ─────────────────────────────
+function renderBalances(){
+  const exps=expenses.filter(e=>e.month===viewMonth);
+  const pm=getPrevMonth();
+  const prevs=prevBals.filter(b=>b.month===pm);
+  const setts=settlements.filter(s=>s.month===viewMonth);
+  const net=calcNet(exps,prevs,setts);
+
+  document.getElementById('balance-tbl').innerHTML=`
+    <thead><tr><th>Member</th><th>Paid</th><th>Share</th><th>Prev</th><th>Settled</th><th>NET</th></tr></thead>
+    <tbody>${MEMBERS.map(m=>{
+      const paid=exps.filter(e=>e.paid_by===m.id).reduce((s,e)=>s+e.amount,0);
+      const share=exps.reduce((s,e)=>e.split_between.includes(m.id)?s+e.amount/e.split_between.length:s,0);
+      const prev=prevs.reduce((s,b)=>b.from_member===m.id?s-b.amount:b.to_member===m.id?s+b.amount:s,0);
+      const settled=setts.reduce((s,t)=>t.from_member===m.id?s+t.amount:t.to_member===m.id?s-t.amount:s,0);
+      const n=net[m.id];
+      return`<tr>
+        <td><span style="color:${esc(m.color)};font-weight:800">${esc(m.emoji)} ${esc(m.name)}</span></td>
+        <td class="tag-g"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(paid.toFixed(0))}</td>
+        <td class="tag-r"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(share.toFixed(0))}</td>
+        <td class="${prev>=0?'tag-g':'tag-r'}">${prev>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(prev).toFixed(0))}</td>
+        <td class="${settled>=0?'tag-g':'tag-r'}">${settled!==0?(settled>=0?'+':'')+'<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>'+Math.abs(settled).toFixed(0):'—'}</td>
+        <td class="${n>=0?'tag-g':'tag-r'}" style="font-weight:800">${n>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(n).toFixed(0))}</td>
+      </tr>`;
+    }).join('')}</tbody>`;
+
+  document.getElementById('net-list').innerHTML=MEMBERS.map(m=>{
+    const v=net[m.id];
+    return`<div class="balance-row ${v>=0?'clear':'owes'}" onclick="showPersonDetail('${esc(jsq(m.id))}')" style="cursor:pointer">
+      <div class="b-left"><div style="font-size:1.3rem">${esc(m.emoji)}</div>
+      <div><div class="b-name" style="color:${esc(m.color)}">${esc(m.name)}</div>
+      <div class="b-sub">${v>=0?'✅ Gets back':'🔴 Owes'} • tap for breakdown</div></div></div>
+      <div class="b-amt ${v>=0?'pos':'neg'}">${v>=0?'+':''}<span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(Math.abs(v).toFixed(0))}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── SETTLE PAGE ───────────────────────────────
+function renderSettlements(){
+  const exps=expenses.filter(e=>e.month===viewMonth);
+  const prevs=prevBals.filter(b=>b.month===getPrevMonth());
+  const setts=settlements.filter(s=>s.month===viewMonth);
+  const net=calcNet(exps,prevs,setts);
+  const txns=simplify(net);
+  const el=document.getElementById('settle-list');
+  if(!txns.length){el.innerHTML=`<div class="empty"><div class="ei">🎉</div><p>All squared up!</p></div>`;return;}
+  el.innerHTML=txns.map(t=>{
+    const f=MEMBERS.find(m=>m.id===t.from),to=MEMBERS.find(m=>m.id===t.to);
+    return`<div class="settle-card">
+      <div><div class="settle-from" style="color:${esc(f.color)}">${esc(f.emoji)} ${esc(f.name)}</div>
+      <div class="settle-to">needs to pay</div>
+      <div class="settle-from" style="color:${esc(to.color)}">${esc(to.emoji)} ${esc(to.name)}</div></div>
+      <div style="font-size:1.5rem;color:var(--muted)">→</div>
+      <div class="settle-amt"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(t.amount.toFixed(0))}</div>
+    </div>`;
+  }).join('');
+
+  // Settlements history
+  const el2=document.getElementById('settlements-history');
+  const monthSetts=settlements.filter(s=>s.month===viewMonth);
+  if(!monthSetts.length){el2.innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:12px">No settlements recorded this month</div>`;return;}
+  el2.innerHTML=monthSetts.map(s=>{
+    const f=MEMBERS.find(m=>m.id===s.from_member),t=MEMBERS.find(m=>m.id===s.to_member);
+    return`<div class="balance-row owes" data-ifx-k="s${esc(s.id)}" data-ifx-amt="${esc(s.amount)}" data-ifx-label="${esc((f?.name||'')+' → '+(t?.name||''))}" data-ifx-date="${esc(s.month)}" style="border-color:var(--green)">
+      <div class="b-left"><div style="font-size:1.2rem">✅</div>
+      <div><div class="b-name">${esc(f?.emoji)} ${esc(f?.name)} paid ${esc(t?.emoji)} ${esc(t?.name)}</div>
+      <div class="b-sub">${esc(new Date(s.created_at||Date.now()).toLocaleDateString())}</div></div></div>
+      <div>
+        <div class="b-amt pos"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(s.amount)}</div>
+        ${currentUser?.isAdmin?`<button class="btn-del" onclick="delSettlement('${esc(jsq(s.id))}')">🗑️</button>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function recordSettlement(){
+  const from=document.getElementById('settle-from').value;
+  const to=document.getElementById('settle-to').value;
+  const amt=parseFloat(document.getElementById('settle-amount').value);
+  if(!from||!to||!amt||from===to){alert('⚠️ Fill all fields correctly');return;}
+  const entry={from_member:from,to_member:to,amount:amt,month:viewMonth};
+  if(!isDemoMode&&sb){
+    const{data,error}=await sb.from('settlements').insert([entry]).select();
+    if(error){alert('Error: '+error.message);return;}
+    settlements.push(data[0]);
+  } else {
+    entry.id=Date.now();entry.created_at=new Date().toISOString();settlements.push(entry);
+  }
+  document.getElementById('settle-amount').value='';
+  showToast(`✅ Settlement recorded! <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(amt)} from ${esc(MEMBERS.find(m=>m.id===from)?.name)} to ${esc(MEMBERS.find(m=>m.id===to)?.name)}`);
+  refresh();
+}
+
+async function emailSquadReport(){
+  if(isDemoMode||!sb){showToast('📧 Reports need the live database — this works once deployed');return;}
+  const btn=document.getElementById('btn-email-squad-report');
+  btn.disabled=true;const oldTxt=btn.textContent;btn.textContent='Sending…';
+  const{error}=await sb.functions.invoke('send-report',{body:{type:'combined',month:viewMonth}});
+  btn.disabled=false;btn.textContent=oldTxt;
+  if(error){showToast('⚠️ Could not send — check the Edge Function is deployed');return;}
+  showToast(`📧 Report on its way to ${currentEmail}`);
+}
+
+async function delSettlement(id){
+  if(!currentUser?.isAdmin){alert('⛔ Admin only!');return;}
+  if(!confirm('Delete this settlement?'))return;
+  if(!isDemoMode&&sb){
+    const{error}=await sb.from('settlements').delete().eq('id',id);
+    if(error){alert('Error: '+error.message);return;}
+  }
+  settlements=settlements.filter(s=>String(s.id)!==String(id));
+  refresh();
+}
+
+// ── PREV BALANCES ─────────────────────────────
+function populatePrevBalDropdowns(){
+  ['pb-from','pb-to'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.innerHTML=MEMBERS.map(m=>`<option value="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
+  });
+  ['settle-from','settle-to'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.innerHTML=MEMBERS.map(m=>`<option value="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
+  });
+}
+
+function renderPrevBals(){
+  const el=document.getElementById('prev-list');
+  if(!prevBals.length){el.innerHTML=`<div style="color:var(--muted);font-size:.82rem;text-align:center;padding:16px">No previous balances</div>`;return;}
+  el.innerHTML=prevBals.map(b=>{
+    const f=MEMBERS.find(m=>m.id===b.from_member),t=MEMBERS.find(m=>m.id===b.to_member);
+    return`<div class="balance-row owes" data-ifx-k="pv${esc(b.id)}" data-ifx-amt="${esc(b.amount)}" data-ifx-label="${esc((f?.name||'')+' → '+(t?.name||''))}" data-ifx-date="${esc(b.month)}">
+      <div class="b-left"><div style="font-size:1.2rem">${esc(f?.emoji)}</div>
+      <div><div class="b-name">${esc(f?.name)} → ${esc(t?.name)}</div><div class="b-sub">Month: ${esc(b.month)}</div></div></div>
+      <div><div class="b-amt neg"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(b.amount)}</div>
+      ${currentUser?.isAdmin?`<button class="btn-del" onclick="delPrev('${esc(jsq(b.id))}')">🗑️</button>`:''}
+      </div></div>`;
+  }).join('');
+}
+
+async function addPrevBal(){
+  const from=document.getElementById('pb-from').value,to=document.getElementById('pb-to').value;
+  const amt=parseFloat(document.getElementById('pb-amount').value);
+  if(!from||!to||!amt||from===to){alert('⚠️ Fill all fields correctly');return;}
+  const pm=getPrevMonth();
+  const entry={from_member:from,to_member:to,amount:amt,month:pm};
+  if(!isDemoMode&&sb){
+    const{data,error}=await sb.from('prev_balances').insert([entry]).select();
+    if(error){alert('Error: '+error.message);return;}
+    prevBals.push(data[0]);
+  } else {entry.id=Date.now();prevBals.push(entry);}
+  document.getElementById('pb-amount').value='';
+  showToast('✅ Balance added!');
+  refresh();
+}
+
+async function delPrev(id){
+  if(!currentUser?.isAdmin){alert('⛔ Admin only!');return;}
+  if(!confirm('Delete this balance?'))return;
+  if(!isDemoMode&&sb){
+    const{error}=await sb.from('prev_balances').delete().eq('id',id);
+    if(error){alert('Error: '+error.message);return;}
+  }
+  prevBals=prevBals.filter(b=>String(b.id)!==String(id));
+  refresh();
+}
+
+// ══════════════════════════════════════════
+// ── ADMIN PANEL ────────────────────────────
+// ══════════════════════════════════════════
+function openAdmin(){
+  if(!currentUser?.isAdmin){alert('⛔ Admin only!');return;}
+  document.getElementById('admin-overlay').classList.add('open');
+  renderAdminMembers();renderAdminExpenses();renderAdminBalances();
+  updateMonthLabels();
+}
+function closeAdmin(){
+  document.getElementById('admin-overlay').classList.remove('open');
+  refresh();renderSquad();initAddForm();
+}
+function adminTab(name,btn){
+  document.querySelectorAll('.admin-tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.admin-section').forEach(s=>s.classList.remove('active'));
+  btn.classList.add('active');document.getElementById('atab-'+name).classList.add('active');
+}
+
+// ADMIN: MEMBERS
+function renderAdminMembers(){
+  const el=document.getElementById('member-edit-list');
+  el.innerHTML=`
+  <div class="info-box" style="margin-bottom:12px">✏️ Edit members or add new ones. Changes save immediately to all users.</div>
+  ${MEMBERS.map((m,i)=>`
+    <div class="member-edit-card">
+      <div class="member-edit-top">
+        <div class="member-big-av" style="background:${esc(m.color)}30;border:2px solid ${esc(m.color)}60">${esc(m.emoji)}</div>
+        <div><div class="member-edit-name">${esc(m.name)}</div>
+        <div class="member-edit-role">${m.isAdmin?'👑 Admin':'👤 Member'}</div></div>
+      </div>
+      <div class="edit-row">
+        <div><div class="edit-label">Name</div><input class="edit-inp" id="em-name-${esc(i)}" value="${esc(m.name)}" /></div>
+        <div><div class="edit-label">Email</div><input class="edit-inp" id="em-email-${esc(i)}" type="email" value="${esc(m.email)||''}" placeholder="email@gmail.com" /></div>
+      </div>
+      <div class="edit-row">
+        <div><div class="edit-label">Emoji</div>
+          <select class="edit-inp" id="em-emoji-${esc(i)}">${EMOJIS.map(e=>`<option value="${esc(e)}" ${e===m.emoji?'selected':''}>${esc(e)}</option>`).join('')}</select></div>
+        <div><div class="edit-label">Color</div>
+          <select class="edit-inp" id="em-color-${esc(i)}">${COLORS.map(c=>`<option value="${esc(c)}" ${c===m.color?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="btn-save-member" onclick="saveMember(${esc(i)})" style="flex:1">💾 Save</button>
+        ${m.email?`<button onclick="adminSendSquadReport('${esc(jsq(m.id))}','${esc(jsq(m.email))}')" title="Email this member's report" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-weight:800;cursor:pointer;">📧</button>`:''}
+        ${MEMBERS.length>2&&!m.isAdmin?`<button onclick="removeMember(${esc(i)})" style="padding:8px 14px;border-radius:10px;border:none;background:rgba(255,107,107,.15);color:var(--red);font-weight:800;cursor:pointer;border:1px solid rgba(255,107,107,.3)">🗑️</button>`:''}
+      </div>
+    </div>`).join('')}
+  <button onclick="addNewMember()" style="width:100%;padding:14px;border-radius:14px;border:2px dashed var(--border);background:transparent;color:var(--accent2);font-family:'Fredoka One',cursive;font-size:1rem;cursor:pointer;margin-top:8px">
+    ➕ Add New Member
+  </button>`;
+}
+async function adminSendSquadReport(memberId,toEmail){
+  if(isDemoMode||!sb){showToast('📧 Needs the live database');return;}
+  if(!confirm(`Email ${toEmail} their Squad Split report now?`))return;
+  const{error}=await sb.functions.invoke('send-report',{body:{type:'combined',month:viewMonth,target_email:toEmail}});
+  showToast(error?'⚠️ Send failed':`📧 Sent to ${toEmail}`);
+}
+
+async function saveMember(i){
+  const name=document.getElementById(`em-name-${i}`).value.trim();
+  const email=document.getElementById(`em-email-${i}`).value.trim();
+  const emoji=document.getElementById(`em-emoji-${i}`).value;
+  const color=document.getElementById(`em-color-${i}`).value;
+  if(!name){alert('⚠️ Name cannot be empty!');return;}
+  MEMBERS[i]={...MEMBERS[i],name,email,emoji,color};
+  await saveMembers();
+  if(currentUser&&currentUser.id===MEMBERS[i].id){
+    currentUser={...MEMBERS[i]};
+    sessionStorage.setItem('sq_user',JSON.stringify(currentUser));
+    document.getElementById('hdr-name').textContent=currentUser.name;
+    document.getElementById('hdr-av').textContent=currentUser.emoji;
+  }
+  renderAdminMembers();showToast(`✅ ${name} saved!`);
+}
+
+async function addNewMember(){
+  const newId='member_'+Date.now();
+  MEMBERS.push({id:newId,name:'New Member',email:'',emoji:'😎',color:'#b06aff',isAdmin:false});
+  await saveMembers();
+  renderAdminMembers();showToast('✅ New member added — edit their details above');
+}
+
+async function removeMember(i){
+  if(!confirm(`Remove ${MEMBERS[i].name} from the squad?`))return;
+  MEMBERS.splice(i,1);
+  await saveMembers();
+  renderAdminMembers();showToast('✅ Member removed');
+}
+
+// ADMIN: EXPENSES
+function renderAdminExpenses(){
+  const el=document.getElementById('admin-expense-list');
+  const list=expenses.filter(e=>e.month===viewMonth);
+  if(!list.length){el.innerHTML=`<div style="text-align:center;color:var(--muted);padding:30px">No expenses this month</div>`;return;}
+  el.innerHTML=list.map(e=>{
+    const splitOpts=MEMBERS.map(m=>`
+      <label style="display:flex;align-items:center;gap:6px;font-size:.75rem;cursor:pointer;">
+        <input type="checkbox" value="${esc(m.id)}" ${e.split_between.includes(m.id)?'checked':''}
+          style="accent-color:var(--accent2);" onchange="updateExpSplit(this,'${esc(jsq(e.id))}')" />
+        ${esc(m.emoji)} ${esc(m.name)}</label>`).join('');
+    return`<div class="exp-edit-card">
+      <div class="exp-edit-title">${esc(CAT_ICONS[e.category])||'📦'} ${esc(e.name)} — <span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span>${esc(e.amount)}</div>
+      <div class="exp-edit-grid">
+        <div><div class="edit-label">Name</div><input class="edit-inp" id="ee-name-${esc(e.id)}" value="${esc(e.name)}" /></div>
+        <div><div class="edit-label"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span> Amount</div><input class="edit-inp" type="number" id="ee-amt-${esc(e.id)}" value="${esc(e.amount)}" /></div>
+        <div><div class="edit-label">Paid By</div>
+          <select class="edit-inp" id="ee-paid-${esc(e.id)}">${MEMBERS.map(m=>`<option value="${esc(m.id)}" ${m.id===e.paid_by?'selected':''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('')}</select></div>
+        <div><div class="edit-label">Date</div><input class="edit-inp" type="date" id="ee-date-${esc(e.id)}" value="${esc(e.date)}" /></div>
+      </div>
+      <div class="exp-edit-full"><div class="edit-label">Category</div>
+        <select class="edit-inp" id="ee-cat-${esc(e.id)}">${Object.entries(CAT_ICONS).map(([k,v])=>`<option value="${esc(k)}" ${k===e.category?'selected':''}>${esc(v)} ${esc(k)}</option>`).join('')}</select></div>
+      <div class="exp-edit-full"><div class="edit-label">Split Between</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;padding:6px 0;" id="ee-split-${esc(e.id)}">${splitOpts}</div></div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <button class="btn-save-exp" onclick="saveExpense('${esc(jsq(e.id))}')">💾 Save</button>
+        <button class="btn-del-exp" onclick="delExp('${esc(jsq(e.id))}');renderAdminExpenses()">🗑️ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function saveExpense(id){
+  const name=document.getElementById(`ee-name-${id}`).value.trim();
+  const amount=parseFloat(document.getElementById(`ee-amt-${id}`).value);
+  const paid_by=document.getElementById(`ee-paid-${id}`).value;
+  const date=document.getElementById(`ee-date-${id}`).value;
+  const category=document.getElementById(`ee-cat-${id}`).value;
+  const split_between=[...document.querySelectorAll(`#ee-split-${id} input:checked`)].map(cb=>cb.value);
+  if(!name||!amount||!paid_by||!date||!split_between.length){alert('⚠️ Fill all fields');return;}
+  const month=date.slice(0,7);
+  const updated={name,amount,paid_by,split_between,date,category,month};
+  if(!isDemoMode&&sb){
+    const{error}=await sb.from('expenses').update(updated).eq('id',id);
+    if(error){alert('Error: '+error.message);return;}
+  }
+  const idx=expenses.findIndex(e=>String(e.id)===String(id));
+  if(idx>-1)expenses[idx]={...expenses[idx],...updated};
+  showToast('✅ Expense updated!');renderAdminExpenses();refresh();
+}
+
+// ADMIN: BALANCES
+function renderAdminBalances(){
+  const el=document.getElementById('admin-balance-list');
+  ['apb-from','apb-to'].forEach(id=>{
+    document.getElementById(id).innerHTML=MEMBERS.map(m=>`<option value="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
+  });
+  if(!prevBals.length){el.innerHTML=`<div style="text-align:center;color:var(--muted);padding:20px">No previous balances yet</div>`;return;}
+  el.innerHTML=prevBals.map(b=>{
+    const f=MEMBERS.find(m=>m.id===b.from_member),t=MEMBERS.find(m=>m.id===b.to_member);
+    return`<div class="exp-edit-card">
+      <div class="exp-edit-title">${esc(f?.emoji)} ${esc(f?.name)} → ${esc(t?.emoji)} ${esc(t?.name)}</div>
+      <div class="exp-edit-grid">
+        <div><div class="edit-label">From</div>
+          <select class="edit-inp" id="ab-from-${esc(b.id)}">${MEMBERS.map(m=>`<option value="${esc(m.id)}" ${m.id===b.from_member?'selected':''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('')}</select></div>
+        <div><div class="edit-label">To</div>
+          <select class="edit-inp" id="ab-to-${esc(b.id)}">${MEMBERS.map(m=>`<option value="${esc(m.id)}" ${m.id===b.to_member?'selected':''}>${esc(m.emoji)} ${esc(m.name)}</option>`).join('')}</select></div>
+      </div>
+      <div style="margin-bottom:8px;"><div class="edit-label"><span class="dhs"><svg viewBox="0 0 100 120" xmlns="http://www.w3.org/2000/svg"><path d="M5,5 L5,115 L45,115 C80,115 100,90 100,60 C100,30 80,5 45,5 Z M20,20 L43,20 C68,20 82,35 82,60 C82,85 68,100 43,100 L20,100 Z"/><rect x="0" y="42" width="72" height="10" rx="2"/><rect x="0" y="62" width="72" height="10" rx="2"/></svg></span> Amount</div>
+        <input class="edit-inp" type="number" id="ab-amt-${esc(b.id)}" value="${esc(b.amount)}" style="width:100%;" /></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn-save-exp" onclick="savePrevBal('${esc(jsq(b.id))}')">💾 Save</button>
+        <button class="btn-del-exp" onclick="delPrev('${esc(jsq(b.id))}');renderAdminBalances()">🗑️ Delete</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function savePrevBal(id){
+  const from=document.getElementById(`ab-from-${id}`).value;
+  const to=document.getElementById(`ab-to-${id}`).value;
+  const amount=parseFloat(document.getElementById(`ab-amt-${id}`).value);
+  if(!from||!to||!amount||from===to){alert('⚠️ Fill all fields correctly');return;}
+  const updated={from_member:from,to_member:to,amount};
+  if(!isDemoMode&&sb){
+    const{error}=await sb.from('prev_balances').update(updated).eq('id',id);
+    if(error){alert('Error: '+error.message);return;}
+  }
+  const idx=prevBals.findIndex(b=>String(b.id)===String(id));
+  if(idx>-1)prevBals[idx]={...prevBals[idx],...updated};
+  showToast('✅ Balance updated!');renderAdminBalances();refresh();
+}
+
+async function adminAddPrevBal(){
+  const from=document.getElementById('apb-from').value,to=document.getElementById('apb-to').value;
+  const amt=parseFloat(document.getElementById('apb-amount').value);
+  if(!from||!to||!amt||from===to){alert('⚠️ Fill all fields correctly');return;}
+  const entry={from_member:from,to_member:to,amount:amt,month:getPrevMonth()};
+  if(!isDemoMode&&sb){
+    const{data,error}=await sb.from('prev_balances').insert([entry]).select();
+    if(error){alert('Error: '+error.message);return;}
+    prevBals.push(data[0]);
+  } else {entry.id=Date.now();prevBals.push(entry);}
+  document.getElementById('apb-amount').value='';
+  renderAdminBalances();showToast('✅ Balance added!');refresh();
+}
+
+// ── TOAST ─────────────────────────────────────
+function showToast(msg){
+  const t=document.createElement('div');
+  t.style.cssText='position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#6bcb77;color:#0b1a0e;padding:10px 20px;border-radius:12px;font-weight:800;font-size:.88rem;z-index:999;animation:slideUp .3s ease;white-space:nowrap;';
+  t.textContent=msg;document.body.appendChild(t);
+  setTimeout(()=>t.remove(),2800);
+}
+
+// ── NAV ───────────────────────────────────────
+
+// ── v7.8 drawer + notification bell ──
+function openDrawer(){document.getElementById('drawer').classList.add('open');document.getElementById('drawer-scrim').classList.add('open');}
+function closeDrawer(){document.getElementById('drawer').classList.remove('open');document.getElementById('drawer-scrim').classList.remove('open');}
+const _e=esc;
+let ntfs=[];
+async function loadNtf(){
+  if(isDemoMode||!sb||!currentUser||!currentEmail) return;
+  const {data}=await sb.from('bill_notifications').select('*').eq('recipient_email',currentEmail.toLowerCase()).order('created_at',{ascending:false}).limit(40);
+  ntfs=data||[]; const n=ntfs.filter(x=>!x.is_read).length, b=document.getElementById('ntf-badge'); b.textContent=n>99?'99+':n; b.style.display=n?'flex':'none';
+  document.getElementById('ntf-list').innerHTML=ntfs.length?ntfs.map(x=>`<div class="ntf-row ${x.is_read?'':'unread'}" onclick="readNtf(${esc(x.id)})"><b>${_e(x.title)}</b><div>${_e(x.message)}</div><small>${esc(new Date(x.created_at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}))}</small></div>`).join(''):'<p style="text-align:center;color:var(--muted);font-size:.8rem;">No notifications</p>';
+}
+async function readNtf(id){ await sb.from('bill_notifications').update({is_read:true}).eq('id',id); loadNtf(); }
+async function readAllNtf(){ await sb.from('bill_notifications').update({is_read:true}).eq('recipient_email',currentEmail.toLowerCase()).eq('is_read',false); loadNtf(); }
+function toggleNtf(){ const o=document.getElementById('ntf-panel').classList.toggle('open'); document.getElementById('ntf-scrim').classList.toggle('open',o); if(o) loadNtf(); }
+setInterval(loadNtf,30000); setTimeout(loadNtf,3000);
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadNtf(); });
+
+function showPage(name,navEl){
+  try{ ifxSel.clear(); }catch(e){}
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  if(navEl)navEl.classList.add('active');
+}
+
+// ── HELPERS ───────────────────────────────────
+function showErr(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+function showSucc(id,msg){const e=document.getElementById(id);e.textContent=msg;e.style.display='block';}
+function hideMsg(id){const e=document.getElementById(id);if(e)e.style.display='none';}
+</script>
+</body>
+</html>
