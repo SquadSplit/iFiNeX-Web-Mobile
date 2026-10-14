@@ -1,6 +1,6 @@
 {
   "name": "ifinex-mobile",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "description": "iFiNeX cloud edition (Bill Tracker + Squad Split + Expense/Event/Trip/custom Trackers + Budget & Salary Planner) as a native Android/iOS app. Same Supabase backend, same HTML/JS.",
   "scripts": {
     "sync": "npx cap sync",
