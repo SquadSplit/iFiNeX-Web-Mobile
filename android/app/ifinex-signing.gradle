@@ -1,0 +1,62 @@
+// iFiNeX — ONE signing key for Android Studio AND GitHub.   (applied from app/build.gradle)
+//
+// Android installs an APK as an UPDATE (keeps the data, no uninstall) only if it is signed with the SAME key as the installed app.
+// So every build — on your PC in Android Studio, or on GitHub — must use the same key file. Where this script looks, in this order:
+//   1. GitHub:          environment IFX_KEYSTORE_FILE + IFX_KEYSTORE_PASSWORD (+ IFX_KEY_ALIAS)   -> set by .github/workflows/build-apk.yml from your 2 secrets
+//   2. Your computer:   <home>/ifinex-keys/signing.properties  +  <home>/ifinex-keys/ifinex.keystore   -> created ONCE by tools/SIGNING_KEY_create (.bat/.sh)
+//                       (home = C:\Users\<you> on Windows; override the folder with the environment variable IFX_KEYS_DIR)
+// No key found -> the build STOPS with a clear message (instead of silently making an APK that can never update the installed app).
+// Escape hatch for throw-away test builds only:  environment IFX_ALLOW_DEBUG_KEY=1  (APK then gets the temporary debug key and CANNOT update a real install).
+
+def ifxEnv = { String n -> def v = System.getenv(n); (v == null || v.trim().isEmpty()) ? null : v.trim() }
+
+def ifxKeyFound = null
+if (ifxEnv('IFX_KEYSTORE_FILE') != null && new File(ifxEnv('IFX_KEYSTORE_FILE')).isFile()) {
+    ifxKeyFound = [
+        file         : new File(ifxEnv('IFX_KEYSTORE_FILE')),
+        storePassword: ifxEnv('IFX_KEYSTORE_PASSWORD'),
+        keyAlias     : ifxEnv('IFX_KEY_ALIAS') ?: 'ifinex',
+        keyPassword  : ifxEnv('IFX_KEYSTORE_PASSWORD'),
+        where        : 'GitHub secrets'
+    ]
+} else {
+    def dir   = new File(ifxEnv('IFX_KEYS_DIR') ?: (System.getProperty('user.home') + '/ifinex-keys'))
+    def props = new File(dir, 'signing.properties')
+    def ks    = new File(dir, 'ifinex.keystore')
+    if (props.isFile() && ks.isFile()) {
+        def p = new Properties()
+        props.withInputStream { p.load(it) }
+        ifxKeyFound = [
+            file         : ks,
+            storePassword: p.getProperty('storePassword'),
+            keyAlias     : p.getProperty('keyAlias', 'ifinex'),
+            keyPassword  : p.getProperty('keyPassword', p.getProperty('storePassword')),
+            where        : dir.absolutePath
+        ]
+    }
+}
+if (ifxKeyFound != null && (ifxKeyFound.storePassword == null || ifxKeyFound.storePassword.isEmpty())) {
+    throw new GradleException('iFiNeX signing key found (' + ifxKeyFound.where + ') but its password is missing. Run tools/SIGNING_KEY_create again, or check IFX_KEYSTORE_PASSWORD.')
+}
+if (ifxKeyFound != null) {
+    println 'iFiNeX signing key: ' + ifxKeyFound.file + '  (' + ifxKeyFound.where + ')'
+}
+
+// the main build.gradle reads it as:  project.ext.ifxKey   (null = no key)
+project.ext.set('ifxKey', ifxKeyFound)
+
+// Stop BEFORE compiling if a real build was asked for and there is no key. (Android Studio "Sync" does not run these tasks, so opening the project still works.)
+gradle.taskGraph.whenReady { graph ->
+    boolean building = graph.allTasks.any { t -> t.name ==~ /^(assemble|package|install|bundle).*/ }
+    if (building && ifxKeyFound == null && ifxEnv('IFX_ALLOW_DEBUG_KEY') != '1') {
+        throw new GradleException(
+            "\n\n=====================================================================\n" +
+            " iFiNeX: NO SIGNING KEY FOUND - build stopped on purpose.\n" +
+            " Without the iFiNeX key the APK could not update the app already on your phone\n" +
+            " (Android would say 'App not installed' / force you to uninstall first).\n\n" +
+            " FIX (once, 2 minutes): in the project folder open the 'tools' folder and double-click\n" +
+            "     SIGNING_KEY_create.bat      (Mac/Linux:  bash tools/SIGNING_KEY_create.sh)\n" +
+            " then build again.  Details: 'Signing Key & Auto-Update Guide', Part 1.\n" +
+            "=====================================================================\n")
+    }
+}

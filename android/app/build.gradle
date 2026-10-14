@@ -1,0 +1,76 @@
+apply plugin: 'com.android.application'
+
+// versionCode = minutes since 1970 (same rule as the GitHub build), so EVERY build — Android Studio or GitHub, any day, any computer — is newer than the one
+// before it and Android installs it as an UPDATE (a lower number is refused as "downgrade" -> "App not installed"). Never edit this by hand.
+def ifxVersionCode = (System.getenv('IFX_VERSION_CODE') ?: String.valueOf((long) (System.currentTimeMillis() / 60000L))).toInteger()
+
+// ONE signing key for Android Studio and GitHub (see ifinex-signing.gradle) - this is what lets every build install as an UPDATE.
+apply from: 'ifinex-signing.gradle'
+def ifxKey = project.ext.ifxKey   // null when no key was found (the build then stops before compiling, see ifinex-signing.gradle)
+
+android {
+    namespace "io.github.squadsplit.app"
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "io.github.squadsplit.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode ifxVersionCode
+        versionName "2.5.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    if (ifxKey != null) {
+        signingConfigs {
+            ifinex {
+                storeFile ifxKey.file
+                storePassword ifxKey.storePassword
+                keyAlias ifxKey.keyAlias
+                keyPassword ifxKey.keyPassword
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (ifxKey != null) signingConfig signingConfigs.ifinex
+        }
+        release {
+            if (ifxKey != null) signingConfig signingConfigs.ifinex
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

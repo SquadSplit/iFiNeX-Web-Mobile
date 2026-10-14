@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- iFiNeX launch screen: solid brand background + the logo at its true proportions, centred.
+     (Replaces the old full-screen splash.png, which Android stretched to every phone's shape.) -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ifinex_bg" />
+    <item>
+        <bitmap
+            android:gravity="center"
+            android:src="@drawable/ifinex_splash_logo" />
+    </item>
+</layer-list>
