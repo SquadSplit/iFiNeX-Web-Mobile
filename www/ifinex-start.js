@@ -6,15 +6,30 @@
   function show(el, on) { el.classList.toggle('hide', !on); }
   function go() { location.replace('bill-tracker.html'); }
 
-  // default address = the server this app was built for (bundled ifinex-config.json → "site"), or the one used before
-  var prev = null; try { prev = JSON.parse(localStorage.getItem('ifx_server') || 'null'); } catch (e) { }
+  // SECURITY: the address box is ALWAYS empty. No site is pre-filled, remembered or suggested (not the bundled one, not the previous one):
+  // the user types the address of the server they were given. Nothing about any server is shown until they ask to check one.
   var changing = !!(W.IFX_CFG && W.IFX_CFG.mode) || /[?&]change=1/.test(location.search);
-  if (prev && prev.url) $('url').value = prev.url;
-  else fetch('ifinex-config.json', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (c) { if (c && c.site && !$('url').value) $('url').value = c.site; }).catch(function () { });
   if (changing) { show($('btn-cancel'), true); $('h').textContent = 'Change how iFiNeX connects'; }
   $('btn-cancel').onclick = function () { go(); };
 
-  // "squadsplit.github.io" / "https://host/path/index.html" → "https://host/path/"
+  // ---- tabs: Server | Standalone (side by side, one panel at a time) ----
+  var TABS = ['server', 'sa'];
+  function tab(name) {
+    TABS.forEach(function (t) {
+      var on = t === name, b = $('tab-' + t), p = $('c-' + t);
+      b.setAttribute('aria-selected', on ? 'true' : 'false'); b.tabIndex = on ? 0 : -1; show(p, on);
+    });
+  }
+  TABS.forEach(function (t, i) {
+    var b = $('tab-' + t);
+    b.addEventListener('click', function () { tab(t); });
+    b.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') { var n = TABS[(i + (e.key === 'ArrowRight' ? 1 : TABS.length - 1)) % TABS.length]; tab(n); $('tab-' + n).focus(); e.preventDefault(); }
+    });
+  });
+  tab(/[?&]tab=sa/.test(location.search) ? 'sa' : 'server');
+
+  // "my-group.example" / "https://host/path/index.html" → "https://host/path/"
   function normalize(raw) {
     var s = String(raw || '').trim(); if (!s) throw new Error('Type the server web address first.');
     if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = 'https://' + s;
@@ -39,9 +54,8 @@
       found = c; foundUrl = base;
       var f = $('found'); f.textContent = '';
       var n = D.createElement('b'); n.textContent = '✅ ' + String(c.name || 'iFiNeX server').slice(0, 60); f.appendChild(n);
-      var l1 = D.createElement('div'); l1.textContent = 'Website: ' + new URL(base).host; f.appendChild(l1);
-      var l2 = D.createElement('div'); l2.className = 'mono'; l2.textContent = 'Database: ' + M.host(c.supabaseUrl); f.appendChild(l2);
-      var l3 = D.createElement('div'); l3.textContent = 'Only continue if you trust this server — you will sign in to it.'; l3.style.cssText = 'margin-top:6px;font-size:.74rem'; f.appendChild(l3);
+      // SECURITY: only the server's NAME is shown. Database address, keys and any other technical detail are never displayed.
+      var l3 = D.createElement('div'); l3.textContent = 'Found. Only continue if you trust the person who gave you this address — you will sign in to this server.'; l3.style.cssText = 'margin-top:6px;font-size:.74rem'; f.appendChild(l3);
       show(f, true); show($('btn-use'), true); msg('');
     } catch (e) {
       var m = String(e && e.message || e);

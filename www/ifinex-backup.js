@@ -93,7 +93,7 @@
     var b = box(), w = who(), a = w.managing || w.me || {}, em = accountEmail(), adm = isAdmin();
     var gd = !!W.ifxGDrive;
     b.innerHTML = '<button class="x" aria-label="Close" data-a="close">✕</button><h3>💾 Backup &amp; Restore</h3>' +
-      '<div class="sub">Your data lives on the server <b>' + esc(C.name || C.host || '') + '</b>. A backup file is your own extra copy: keep it somewhere safe (Drive, e-mail to yourself, a computer).</div>' +
+      '<div class="sub">Your data lives on the server <b>' + esc(C.name || 'your server') + '</b>. A backup file is your own extra copy: keep it somewhere safe (Drive, e-mail to yourself, a computer).</div>' +
       '<div class="sub">Account: <b>' + esc(a.name || em) + '</b> · ' + esc(em) + '<br>Last backup made here: <b>' + esc(dateTxt(ls('ifx_br_last'))) + '</b></div>' +
       '<button class="act p" data-a="bk-acc">⬇ Create backup file<small>Everything of ' + esc(a.name || 'this account') + ' (all trackers, bills, cards, plans, budget, theme) as one .json file</small></button>' +
       (adm || (W._accountOptions && W._accountOptions.length > 1) ? '<button class="act" data-a="bk-all">⬇ Back up everything I can access<small>' + (adm ? 'Admin: ALL accounts and the whole squad' : 'Your account and every account you manage') + '</small></button>' : '') +
@@ -118,7 +118,7 @@
     var err = validate(o); if (err) return out('❌ ' + err);
     var other = o.server && C.host && o.server !== C.host;
     var msg = 'Restore from ' + f.name + '?\n\nMade: ' + dateTxt(o.exported_at) + '\nAccount: ' + (o.account === '*' ? 'everything' : o.account) + '\nRecords: ' + count(o) +
-      '\n\nOnly MISSING records are added back. Nothing existing is changed or deleted.' + (other ? '\n\n⚠️ This backup was made on a DIFFERENT server (' + o.server + '). You are connected to ' + C.host + '. Continue only if you moved servers on purpose.' : '');
+      '\n\nOnly MISSING records are added back. Nothing existing is changed or deleted.' + (other ? '\n\n⚠️ This backup was made on a DIFFERENT server (' + (o.server_name || 'another server') + '). You are connected to ' + (C.name || 'this server') + '. Continue only if you moved servers on purpose.' : '');
     if (!confirm(msg)) return;
     lock(true);
     try { var rep = await restore(o, out); lock(false); paint(reportText(rep)); if (rep.inserted) say('Restored ✓'); }

@@ -26,7 +26,7 @@
       info.appendChild(el('div', 'color:var(--muted,#9aa3c7);font-size:.76rem;', 'Your data is stored on this phone. No account, no internet needed.'));
     } else {
       info.appendChild(el('div', 'font-weight:800;', '☁️ ' + C.name));
-      info.appendChild(el('div', 'color:var(--muted,#9aa3c7);font-size:.76rem;', 'Server: ' + nice(C.site || (JSON.parse(localStorage.getItem('ifx_server') || '{}').url || '')) + ' · Database: ' + C.host));
+      info.appendChild(el('div', 'color:var(--muted,#9aa3c7);font-size:.76rem;', 'Server: ' + nice(C.site || (JSON.parse(localStorage.getItem('ifx_server') || '{}').url || '')) + ''));
     }
     box.appendChild(info);
     if (C.mode === 'server') {
@@ -35,7 +35,7 @@
           var s = JSON.parse(localStorage.getItem('ifx_server') || '{}'); if (!s.url) return say('No server address stored — use “Change”.');
           var r = await fetch(s.url + 'ifinex-config.json', { cache: 'no-store', credentials: 'omit' }); var c = await r.json();
           if (!W.IFX_MODE.valid(c)) throw new Error('invalid');
-          if (c.supabaseUrl.replace(/\/+$/, '') !== s.supabaseUrl) { if (!confirm('This server now points to a DIFFERENT database (' + nice(c.supabaseUrl) + ').\nOnly accept if the server owner told you.\n\nContinue?')) return; }
+          if (c.supabaseUrl.replace(/\/+$/, '') !== s.supabaseUrl) { if (!confirm('This server now points to a DIFFERENT database.\nOnly accept if the server owner told you.\n\nContinue?')) return; }
           W.IFX_MODE.useServer(c, s.url); say('Server settings refreshed ✓'); setTimeout(function () { location.reload(); }, 600);
         } catch (e) { say('❌ Could not reach the server right now.'); }
       }));
@@ -52,7 +52,7 @@
     var secs = [].slice.call(dr.querySelectorAll('.drawer-sec')), s = secs.filter(function (x) { return /settings/i.test(x.textContent); })[0];
     var b = D.createElement('button'); b.className = 'drawer-item ifx-conn-item'; b.textContent = '🔌 Connection'; b.addEventListener('click', function () { try { W.closeDrawer(); } catch (e) { } open(); });
     if (s) s.insertAdjacentElement('afterend', b); else dr.appendChild(b);
-    var ft = D.getElementById('ifx-ver'); if (ft && !/·\s*(☁️|📱)/.test(ft.textContent)) if (C.mode !== 'standalone') ft.dataset.mode = '☁️ ' + (C.host || '');
+    var ft = D.getElementById('ifx-ver'); if (ft && !/·\s*(☁️|📱)/.test(ft.textContent)) if (C.mode !== 'standalone') ft.dataset.mode = '☁️ server';
   }
   function paintFooter() { var ft = D.getElementById('ifx-ver'); if (ft && ft.dataset.mode && ft.textContent.indexOf(ft.dataset.mode) < 0) ft.textContent += ' · ' + ft.dataset.mode; }
   function boot() { drawer(); setInterval(function () { drawer(); paintFooter(); }, 1500); }
