@@ -368,7 +368,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <a class="drawer-item" href="bill-tracker.html#alerts">🔔 Alerts &amp; notifications</a>
     <button id="btn-admin-panel" class="drawer-item" onclick="closeDrawer();openAdmin()" style="display:none;">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.0 · app v2.6</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.1 · app v2.7</div>
   </aside>
 
   <!-- HOME -->
@@ -1527,7 +1527,7 @@ async function loadNtf(){
 async function readNtf(id){ await sb.from('bill_notifications').update({is_read:true}).eq('id',id); loadNtf(); }
 async function readAllNtf(){ await sb.from('bill_notifications').update({is_read:true}).eq('recipient_email',currentEmail.toLowerCase()).eq('is_read',false); loadNtf(); }
 function toggleNtf(){ const o=document.getElementById('ntf-panel').classList.toggle('open'); document.getElementById('ntf-scrim').classList.toggle('open',o); if(o) loadNtf(); }
-setInterval(loadNtf,30000); setTimeout(loadNtf,3000);
+setInterval(()=>{ if(!document.hidden) loadNtf(); },120000); setTimeout(loadNtf,3000);   // v9.1 traffic: 2 min and only while the tab is visible (was every 30 s, even in the background)
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) loadNtf(); });
 
 function showPage(name,navEl){
