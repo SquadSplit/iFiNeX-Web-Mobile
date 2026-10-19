@@ -289,6 +289,22 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
 /* v8.0 iFiNeX branding */
 .login-logo .logo-img{width:84px;height:84px;display:block;margin:0 auto 6px;filter:drop-shadow(0 6px 18px rgba(77,150,255,.35));}
 .hd-logo{width:38px;height:38px;vertical-align:middle;margin-right:6px;border-radius:50%;}.hd-word{height:32px;width:auto;vertical-align:middle;border-radius:8px;}.hd-title h2{display:flex;align-items:center;}
+
+/* v9.3 multi-squad */
+.sq-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;}
+#squad-bar{align-items:center;gap:10px;margin:10px 14px 0;padding:10px 14px;border-radius:14px;background:var(--card);border:1px solid var(--border);cursor:pointer;min-height:48px;}
+#squad-bar.single{cursor:default;}
+#squad-bar .sq-nm,.sq-row .sq-nm{font-family:'Fredoka One',cursive;font-size:1rem;line-height:1.1;}
+#squad-bar .sq-sub,.sq-row .sq-sub{font-size:.68rem;color:var(--muted);font-weight:700;margin-top:2px;}
+#squad-bar .sq-car{margin-left:auto;color:var(--muted);font-size:.9rem;}
+.sq-scrim{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:400;display:none;}.sq-scrim.open{display:block;}
+.sq-sheet{position:fixed;left:0;right:0;bottom:0;max-height:80vh;overflow-y:auto;background:var(--card);border-top:1px solid var(--border);border-radius:20px 20px 0 0;padding:16px 16px 28px;z-index:401;transform:translateY(105%);transition:transform .25s;max-width:480px;margin:0 auto;}
+.sq-sheet.open{transform:none;}
+.sq-row{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;border:1px solid var(--border);background:var(--card2);margin-bottom:8px;cursor:pointer;}
+.sq-row.on{border-color:var(--accent4);}
+.sq-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:1px solid var(--border);background:var(--card2);font-size:.8rem;font-weight:800;cursor:pointer;margin:0 6px 8px 0;}
+.sq-chip.on{background:rgba(77,150,255,.18);border-color:var(--accent4);}
+.sq-dash{width:100%;padding:14px;border-radius:14px;border:2px dashed var(--border);background:transparent;color:var(--accent2);font-family:'Fredoka One',cursive;font-size:1rem;cursor:pointer;margin-top:8px;}
 </style>
 </head>
 <body>
@@ -353,6 +369,9 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
       </div>
     </div>
   </div>
+  <div id="squad-bar" style="display:none;" onclick="openSqSheet()" role="button" tabindex="0"></div>
+  <div class="sq-scrim" id="sq-scrim" onclick="closeSqSheet()"></div>
+  <div class="sq-sheet" id="sq-sheet"></div>
   <div class="ntf-scrim" id="ntf-scrim" onclick="toggleNtf()"></div>
   <div class="ntf-panel" id="ntf-panel"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><b>🔔 Notifications</b><button class="btn-tiny" onclick="readAllNtf()" style="background:var(--card2);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 8px;font-size:.65rem;cursor:pointer;">Mark all read</button></div><div id="ntf-list"></div></div>
   <div class="drawer-scrim" id="drawer-scrim" onclick="closeDrawer()"></div>
@@ -361,6 +380,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="drawer-sec">Modules</div>
     <a class="drawer-item" href="bill-tracker.html">🧭 iFiNeX Hub</a>
     <button class="drawer-item" onclick="closeDrawer()">💸 Squad Split</button>
+    <button class="drawer-item" id="drawer-squads" style="display:none;" onclick="closeDrawer();openSqSheet()">🏘️ Switch squad</button>
     <a class="drawer-item" href="bill-tracker.html">🧾 Bill Tracker</a>
     <a class="drawer-item" href="bill-tracker.html#et">🧮 Expense Tracker</a>
     <div class="drawer-sec">Settings</div>
@@ -368,7 +388,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <a class="drawer-item" href="bill-tracker.html#alerts">🔔 Alerts &amp; notifications</a>
     <button id="btn-admin-panel" class="drawer-item" onclick="closeDrawer();openAdmin()" style="display:none;">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.2 · app v2.8</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.4 · app v2.10</div>
   </aside>
 
   <!-- HOME -->
@@ -482,20 +502,24 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="admin-header">
       <div>
         <h2>⚙️ Admin Panel</h2>
-        <div style="font-size:.7rem;color:var(--muted);margin-top:2px;">👑 Khan — Full Control</div>
+        <div id="admin-who" style="font-size:.7rem;color:var(--muted);margin-top:2px;">👑 Full Control</div>
       </div>
       <button class="btn-close" onclick="closeAdmin()">✕ Close</button>
     </div>
     <div class="admin-tabs">
-      <button class="admin-tab active" onclick="adminTab('members',this)">👥 Members</button>
+      <button class="admin-tab active" data-t="squads" onclick="adminTab('squads',this)">🏘️ Squads</button>
+      <button class="admin-tab" data-t="members" onclick="adminTab('members',this)">👥 Members</button>
       <button class="admin-tab" onclick="adminTab('expenses',this)">💸 Expenses</button>
       <button class="admin-tab" onclick="adminTab('balances',this)">⚖️ Balances</button>
     </div>
     <div class="admin-content">
 
+      <!-- SQUADS TAB (v9.3) -->
+      <div id="atab-squads" class="admin-section active"><div id="squad-admin-body"></div></div>
+
       <!-- MEMBERS TAB -->
-      <div id="atab-members" class="admin-section active">
-        <div class="info-box" style="margin-bottom:16px;">✏️ Edit member names, emails and emojis. Changes apply immediately.</div>
+      <div id="atab-members" class="admin-section">
+        <div class="info-box" style="margin-bottom:16px;">✏️ Edit the names, emails and emojis of the people in the squad you have open. (To put someone in or take someone out of a squad use the Squads tab.)</div>
         <div id="member-edit-list"></div>
       </div>
 
@@ -568,7 +592,12 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;'
 // v8.1 SECURITY: text placed inside a JS string within an inline handler, e.g. onclick="del('${esc(jsq(name))}')"
 function jsq(s){ return String(s==null?'':s).replace(/[\\'"<>&\r\n\u2028\u2029]/g,c=>'\\x'+('0'+c.charCodeAt(0).toString(16)).slice(-2)); }
 let viewMonth=localMonthStr(new Date());
-let MEMBERS=[];
+let MEMBERS=[];            // v9.3: = the people of the squad that is open (every old function keeps working on this list)
+let ALL_PEOPLE=[];         // v9.3: every person I may see (the pool squads are built from)
+let SQUADS=[];             // v9.3: [{id,name,emoji,color,is_archived,member_ids:[...]}]
+let ACTIVE_SQUAD=null;     // v9.3: id of the open squad (null = database not upgraded -> single-squad mode)
+let SQUAD_LEGACY=false;    // v9.3: true when the squads table does not exist yet (old database)
+let SQ_SHOW_ARCHIVED=false;
 let expenses=[],prevBals=[],settlements=[];
 // If a delegate arrives here via a link from Bill Tracker while managing
 // someone else's account, that page passes ?as=<their email> so this page
@@ -609,8 +638,8 @@ async function ifxBoot(){
       applyMyAppearance();
       try{
         const c=JSON.parse(localStorage.getItem('ifx_sqcache_'+currentEmail)||'null');
-        if(c && c.user && Array.isArray(c.members) && c.members.length && !IMPERSONATE_PARAM){
-          MEMBERS=c.members; currentUser=c.user; selectedId=c.user.id; window._fastEntered=true; ifxBootHide(); enterApp().catch(e=>console.warn('load',e)); routeAfterLogin(true).catch(e=>console.warn('refresh',e)); return;
+        if(c && c.user && Array.isArray(c.members) && c.members.length && Array.isArray(c.squads) && !IMPERSONATE_PARAM){
+          MEMBERS=c.members; ALL_PEOPLE=c.people||[]; SQUADS=c.squads; ACTIVE_SQUAD=(c.active==null?null:c.active); SQUAD_LEGACY=!!c.legacy; currentUser=c.user; selectedId=c.user.id; window._fastEntered=true; ifxBootHide(); enterApp().catch(e=>console.warn('load',e)); routeAfterLogin(true).catch(e=>console.warn('refresh',e)); return;
         }
       }catch(e){ console.warn('fast path skipped',e); }
       try{ await routeAfterLogin(true); ifxBootHide(); }
@@ -635,9 +664,27 @@ if(document.readyState==='loading') document.addEventListener('DOMContentLoaded'
 async function loadMembers(){
   if(!isDemoMode&&sb){
     try{
-      const{data}=await sb.from('members_config').select('*').order('sort_order');
-      if(data&&data.length>0){MEMBERS=data.map(r=>({...r,isAdmin:r.is_admin}));return;}
-    }catch(e){}
+      const pe=await sb.from('members_config').select('*').order('sort_order');
+      if(pe.error) throw pe.error;
+      if(pe.data&&pe.data.length>0){
+        ALL_PEOPLE=pe.data.map(r=>({...r,isAdmin:r.is_admin}));
+        // v9.3: which squads exist and who is in them. If the squads table is missing the database is not upgraded yet -> behave exactly like before.
+        const sq=await sb.from('squads').select('*').order('sort_order');
+        if(sq.error){
+          if(/squads|schema cache|does not exist|42P01|PGRST20/i.test(String(sq.error.code||'')+' '+String(sq.error.message||''))){
+            SQUAD_LEGACY=true; SQUADS=[]; ACTIVE_SQUAD=null; MEMBERS=ALL_PEOPLE.slice(); renderSquadBar(); return;
+          }
+          throw sq.error;
+        }
+        const sm=await sb.from('squad_members').select('squad_id,member_id,sort_order').order('sort_order');
+        if(sm.error) throw sm.error;
+        SQUAD_LEGACY=false;
+        SQUADS=(sq.data||[]).map(x=>({...x,member_ids:(sm.data||[]).filter(r=>r.squad_id===x.id).map(r=>r.member_id)}));
+        if(ACTIVE_SQUAD==null||!sqById(ACTIVE_SQUAD)) chooseActiveSquad(currentUser&&currentUser.id);
+        applyActiveSquad(); renderSquadBar();
+        return;
+      }
+    }catch(e){ console.warn('loadMembers',e); }
   }
   // fallback: localStorage
   const saved=localStorage.getItem('sq_members_v2');
@@ -774,7 +821,7 @@ async function routeAfterLogin(silent){
     return;
   }
   // squad_split — find their matching squad roster entry by email.
-  const m=MEMBERS.find(x=>(x.email||'').toLowerCase()===routeEmail.toLowerCase());
+  const m=poolPeople().find(x=>(x.email||'').toLowerCase()===routeEmail.toLowerCase());
   if(!m){
     // v8.6: never fail silently (the old silent=true path just showed the login picker and looked like "Squad Split does not open")
     ifxBootHide(); showStep(3);
@@ -783,11 +830,12 @@ async function routeAfterLogin(silent){
   }
   selectedId=m.id;
   window._viewingAsDelegate = viewingAsDelegate;
+  if(!SQUAD_LEGACY&&SQUADS.length){ chooseActiveSquad(m.id); applyActiveSquad(); renderSquadBar(); }   // v9.3: open the squad this person belongs to (or the one they used last)
   finishLogin();
 }
 
 function finishLogin(){
-  const m=MEMBERS.find(x=>x.id===selectedId);
+  const m=poolPeople().find(x=>x.id===selectedId);
   // Update email in members list — but never when we're viewing as a
   // delegate, or this would overwrite the real member's email with the
   // delegate's own.
@@ -795,7 +843,7 @@ function finishLogin(){
   currentUser={...m};
   if(window._viewingAsDelegate) currentUser._delegatedLabel = window._viewingAsDelegate;
   sessionStorage.setItem('sq_user',JSON.stringify(currentUser));
-  try{ localStorage.setItem('ifx_sqcache_'+currentEmail, JSON.stringify({user:currentUser,members:MEMBERS})); }catch(e){}
+  persistSquadCache();
   if(window._fastEntered){ window._fastEntered=false; return; }   // v8.4: app already open from cache — cache refreshed, nothing more to do
   clearInterval(timerInterval);enterApp();
 }
@@ -840,6 +888,7 @@ async function enterApp(){
   await loadAllData();
   updateMonthLabels();
   renderSquad();
+  renderSquadBar();
   initAddForm();
   document.getElementById('inp-date').value=localDateStr(new Date());
   refresh();
@@ -848,10 +897,12 @@ async function enterApp(){
 
 async function loadAllData(){
   if(!isDemoMode&&sb){
+    // v9.3: only the open squad's money (the database enforces the same rule, this just keeps the lists small)
+    const scoped=t=>{ let q=sb.from(t).select('*'); if(!SQUAD_LEGACY&&ACTIVE_SQUAD!=null) q=q.eq('squad_id',ACTIVE_SQUAD); return q; };
     const[e,p,s]=await Promise.all([
-      sb.from('expenses').select('*').order('date',{ascending:false}),
-      sb.from('prev_balances').select('*'),
-      sb.from('settlements').select('*').order('created_at',{ascending:false}),
+      scoped('expenses').order('date',{ascending:false}),
+      scoped('prev_balances'),
+      scoped('settlements').order('created_at',{ascending:false}),
     ]);
     expenses=e.data||[];
     prevBals=p.data||[];
@@ -1032,7 +1083,7 @@ function getPrevMonthOf(month){
 // ── ADD FORM ──────────────────────────────────
 function initAddForm(){
   document.getElementById('inp-paidby').innerHTML=MEMBERS.map(m=>`<option value="${esc(m.id)}">${esc(m.emoji)} ${esc(m.name)}</option>`).join('');
-  document.getElementById('inp-paidby').value=currentUser.id;
+  if(MEMBERS.some(m=>m.id===currentUser.id)) document.getElementById('inp-paidby').value=currentUser.id;
   document.getElementById('split-group').innerHTML=MEMBERS.map(m=>`
     <div class="cb-item on" data-id="${esc(m.id)}" onclick="this.classList.toggle('on')">${esc(m.emoji)} ${esc(m.name)}</div>`).join('');
 }
@@ -1048,7 +1099,7 @@ async function addExpense(){
   const month=date.slice(0,7);
   const exp={name,amount,paid_by,split_between,date,category,month};
   if(!isDemoMode&&sb){
-    const{data,error}=await sb.from('expenses').insert([exp]).select();
+    const{data,error}=await sb.from('expenses').insert([sqScope(exp)]).select();
     if(error){alert('Error saving: '+error.message);return;}
     expenses.push(data[0]);
   } else {
@@ -1222,7 +1273,7 @@ async function recordSettlement(){
   if(!from||!to||!amt||from===to){alert('⚠️ Fill all fields correctly');return;}
   const entry={from_member:from,to_member:to,amount:amt,month:viewMonth};
   if(!isDemoMode&&sb){
-    const{data,error}=await sb.from('settlements').insert([entry]).select();
+    const{data,error}=await sb.from('settlements').insert([sqScope(entry)]).select();
     if(error){alert('Error: '+error.message);return;}
     settlements.push(data[0]);
   } else {
@@ -1287,7 +1338,7 @@ async function addPrevBal(){
   const pm=getPrevMonth();
   const entry={from_member:from,to_member:to,amount:amt,month:pm};
   if(!isDemoMode&&sb){
-    const{data,error}=await sb.from('prev_balances').insert([entry]).select();
+    const{data,error}=await sb.from('prev_balances').insert([sqScope(entry)]).select();
     if(error){alert('Error: '+error.message);return;}
     prevBals.push(data[0]);
   } else {entry.id=Date.now();prevBals.push(entry);}
@@ -1313,7 +1364,8 @@ async function delPrev(id){
 function openAdmin(){
   if(!currentUser?.isAdmin){alert('⛔ Admin only!');return;}
   document.getElementById('admin-overlay').classList.add('open');
-  renderAdminMembers();renderAdminExpenses();renderAdminBalances();
+  const who=document.getElementById('admin-who'); if(who) who.textContent='👑 '+(currentUser.name||'')+' — Full Control';
+  renderAdminSquads();renderAdminMembers();renderAdminExpenses();renderAdminBalances();
   updateMonthLabels();
 }
 function closeAdmin(){
@@ -1372,7 +1424,7 @@ async function saveMember(i){
   const color=document.getElementById(`em-color-${i}`).value;
   if(!name){alert('⚠️ Name cannot be empty!');return;}
   MEMBERS[i]={...MEMBERS[i],name,email,emoji,color};
-  await saveMembers();
+  if(!(await savePerson(MEMBERS[i]))) return;
   if(currentUser&&currentUser.id===MEMBERS[i].id){
     currentUser={...MEMBERS[i]};
     sessionStorage.setItem('sq_user',JSON.stringify(currentUser));
@@ -1383,6 +1435,7 @@ async function saveMember(i){
 }
 
 async function addNewMember(){
+  if(!SQUAD_LEGACY&&!isDemoMode&&sb&&ACTIVE_SQUAD!=null){ editSquad(ACTIVE_SQUAD); return; }   // v9.3: people are added to a squad from the Squads tab
   const newId='member_'+Date.now();
   MEMBERS.push({id:newId,name:'New Member',email:'',emoji:'😎',color:'#b06aff',isAdmin:false});
   await saveMembers();
@@ -1390,6 +1443,15 @@ async function addNewMember(){
 }
 
 async function removeMember(i){
+  if(!SQUAD_LEGACY&&!isDemoMode&&sb&&ACTIVE_SQUAD!=null){   // v9.3: take the person out of THIS squad only (the person and other squads are untouched)
+    const sq=sqById(ACTIVE_SQUAD); if(!sq) return;
+    if(!confirm(`Remove ${MEMBERS[i].name} from ${sq.name}?\n\nThey stay in your people list and in any other squad. This is refused if they already have expenses, settlements or balances in this squad.`))return;
+    const keep=sq.member_ids.filter(id=>id!==MEMBERS[i].id);
+    const{error}=await sb.rpc('squad_save',{p_id:sq.id,p_name:sq.name,p_emoji:sq.emoji,p_color:sq.color,p_members:keep});
+    if(error){alert(sqErrMsg(error));return;}
+    await loadMembers(); await sqRefreshAll(); showToast('✅ Removed from this squad');
+    return;
+  }
   if(!confirm(`Remove ${MEMBERS[i].name} from the squad?`))return;
   MEMBERS.splice(i,1);
   await saveMembers();
@@ -1495,7 +1557,7 @@ async function adminAddPrevBal(){
   if(!from||!to||!amt||from===to){alert('⚠️ Fill all fields correctly');return;}
   const entry={from_member:from,to_member:to,amount:amt,month:getPrevMonth()};
   if(!isDemoMode&&sb){
-    const{data,error}=await sb.from('prev_balances').insert([entry]).select();
+    const{data,error}=await sb.from('prev_balances').insert([sqScope(entry)]).select();
     if(error){alert('Error: '+error.message);return;}
     prevBals.push(data[0]);
   } else {entry.id=Date.now();prevBals.push(entry);}
@@ -1536,6 +1598,191 @@ function showPage(name,navEl){
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
   if(navEl)navEl.classList.add('active');
+}
+
+// ══════════════════════════════════════════
+// ── v9.3 MULTI-SQUAD ───────────────────────
+// ══════════════════════════════════════════
+const SQ_EMOJIS=['👥','🏠','🏖️','🚗','🎉','⚽','🍕','✈️','💼','🎮','🏕️','🛒','🏋️','🎓'];
+function sqPrefKey(){ return 'ifx_sq_active_'+(currentEmail||''); }
+// adds squad_id to a row that is about to be saved (no-op on an old database). Also used by the Excel import (ifinex-datasets-squad.js).
+function sqScope(o){ return (!SQUAD_LEGACY&&ACTIVE_SQUAD!=null) ? Object.assign({},o,{squad_id:ACTIVE_SQUAD}) : o; }
+window.sqScope=sqScope;
+function sqById(id){ return SQUADS.find(s=>s.id===id); }
+function poolPeople(){ return ALL_PEOPLE.length?ALL_PEOPLE:MEMBERS; }
+function chooseActiveSquad(memberId){
+  if(SQUAD_LEGACY||!SQUADS.length){ ACTIVE_SQUAD=null; return; }
+  let pref=null; try{ const v=localStorage.getItem(sqPrefKey()); if(v!=null&&v!=='') pref=Number(v); }catch(e){}
+  const p=pref!=null?sqById(pref):null;
+  if(p&&!p.is_archived){ ACTIVE_SQUAD=p.id; return; }
+  const live=SQUADS.filter(x=>!x.is_archived);
+  const mine=memberId?live.find(x=>x.member_ids.includes(memberId)):null;
+  ACTIVE_SQUAD=(mine||live[0]||SQUADS[0]).id;
+}
+function applyActiveSquad(){
+  const sq=sqById(ACTIVE_SQUAD);
+  if(sq) MEMBERS=sq.member_ids.map(id=>ALL_PEOPLE.find(p=>p.id===id)).filter(Boolean);
+  else if(!SQUAD_LEGACY&&SQUADS.length===0&&ALL_PEOPLE.length) MEMBERS=[];
+}
+function persistSquadCache(){
+  try{ localStorage.setItem('ifx_sqcache_'+currentEmail, JSON.stringify({user:currentUser,members:MEMBERS,people:ALL_PEOPLE,squads:SQUADS,active:ACTIVE_SQUAD,legacy:SQUAD_LEGACY})); }catch(e){}
+}
+function sqErrMsg(err){
+  const m=String((err&&err.message)||err||'');
+  const x=m.match(/member_has_data:(.+)$/);
+  if(x) return `⚠️ ${x[1]} already has expenses, settlements or balances in this squad, so they cannot be removed from it.`;
+  if(/admin_only/.test(m)) return '⛔ Only an admin can do that.';
+  if(/need_member/.test(m)) return '⚠️ A squad needs at least one person.';
+  if(/bad_name/.test(m)) return '⚠️ Enter a valid name (1–60 characters).';
+  if(/bad_email/.test(m)) return '⚠️ That e-mail address does not look right.';
+  if(/last_squad/.test(m)) return '⚠️ You cannot archive the last visible squad.';
+  if(/unknown_member|squad_not_found/.test(m)) return '⚠️ Something changed — reload the page and try again.';
+  return '⚠️ '+m;
+}
+
+// ---- the squad bar (under the header) + switch sheet ----
+function renderSquadBar(){
+  const bar=document.getElementById('squad-bar'), dr=document.getElementById('drawer-squads'); if(!bar) return;
+  if(SQUAD_LEGACY||isDemoMode||!SQUADS.length&&!currentUser){ bar.style.display='none'; if(dr) dr.style.display='none'; return; }
+  const sq=sqById(ACTIVE_SQUAD);
+  const visible=SQUADS.filter(x=>!x.is_archived||x.id===ACTIVE_SQUAD);
+  const canSwitch=visible.length>1||!!(currentUser&&currentUser.isAdmin);
+  bar.style.display='flex'; bar.classList.toggle('single',!canSwitch);
+  if(!sq){ bar.innerHTML='<div class="sq-ic" style="background:var(--card2)">🕳️</div><div><div class="sq-nm">No squad yet</div><div class="sq-sub">Ask your admin to add you to a squad</div></div>'; if(dr) dr.style.display='none'; return; }
+  bar.innerHTML=`<div class="sq-ic" style="background:${esc(sq.color)}30;border:2px solid ${esc(sq.color)}60">${esc(sq.emoji)}</div>`+
+    `<div><div class="sq-nm">${esc(sq.name)}${sq.is_archived?' · archived':''}</div><div class="sq-sub">${esc(MEMBERS.length)} people${canSwitch?' · tap to switch squad':''}</div></div>`+(canSwitch?'<div class="sq-car">▾</div>':'');
+  if(dr) dr.style.display=canSwitch?'block':'none';
+}
+function openSqSheet(){
+  if(SQUAD_LEGACY||isDemoMode) return;
+  const admin=!!(currentUser&&currentUser.isAdmin);
+  const list=SQUADS.filter(x=>!x.is_archived||x.id===ACTIVE_SQUAD);
+  if(list.length<=1&&!admin) return;
+  const sh=document.getElementById('sq-sheet');
+  sh.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b style="font-family:'Fredoka One',cursive;font-size:1.1rem">🏘️ Switch squad</b><button class="btn-close" onclick="closeSqSheet()">✕</button></div>`+
+    list.map(x=>`<div class="sq-row ${x.id===ACTIVE_SQUAD?'on':''}" onclick="switchSquad(${esc(x.id)})">
+      <div class="sq-ic" style="background:${esc(x.color)}30;border:2px solid ${esc(x.color)}60">${esc(x.emoji)}</div>
+      <div style="flex:1"><div class="sq-nm">${esc(x.name)}</div><div class="sq-sub">${esc(x.member_ids.length)} people</div></div>${x.id===ACTIVE_SQUAD?'<span style="color:var(--accent3);font-weight:800">✓</span>':''}</div>`).join('')+
+    (admin?`<button class="sq-dash" onclick="closeSqSheet();openAdmin();editSquad(null)">➕ Create new squad</button>
+            <button class="sq-dash" style="margin-top:8px;color:var(--text)" onclick="closeSqSheet();openAdmin();adminTab('squads',document.querySelector('.admin-tab[data-t=squads]'))">⚙️ Manage squads</button>`:'');
+  document.getElementById('sq-scrim').classList.add('open'); sh.classList.add('open');
+}
+function closeSqSheet(){ document.getElementById('sq-scrim').classList.remove('open'); document.getElementById('sq-sheet').classList.remove('open'); }
+async function sqRefreshAll(){
+  await loadAllData(); updateMonthLabels(); renderSquad(); initAddForm(); refresh(); renderSquadBar(); persistSquadCache();
+  try{ renderAdminMembers(); renderAdminExpenses(); renderAdminBalances(); renderAdminSquads(); }catch(e){}
+}
+async function switchSquad(id){
+  closeSqSheet();
+  if(id===ACTIVE_SQUAD) return;
+  const sq=sqById(id); if(!sq) return;
+  ACTIVE_SQUAD=id; try{ localStorage.setItem(sqPrefKey(),String(id)); }catch(e){}
+  applyActiveSquad(); showToast('Opening '+sq.name+'…');
+  try{ await sqRefreshAll(); }catch(e){ console.warn('switchSquad',e); showToast('⚠️ Could not load that squad'); }
+}
+
+// ---- a person's own details (name / e-mail / emoji / colour) ----
+async function savePerson(p){
+  const ap=ALL_PEOPLE.find(x=>x.id===p.id); if(ap) Object.assign(ap,{name:p.name,email:p.email,emoji:p.emoji,color:p.color});
+  if(SQUAD_LEGACY||isDemoMode||!sb){ await saveMembers(); return true; }
+  const{error}=await sb.from('members_config').update({name:p.name,email:p.email||'',emoji:p.emoji,color:p.color}).eq('id',p.id);
+  if(error){ alert('⚠️ Could not save: '+error.message); return false; }
+  persistSquadCache(); return true;
+}
+
+// ---- Admin → Squads ----
+let SQ_EDIT=null;
+function renderAdminSquads(){
+  const el=document.getElementById('squad-admin-body'); if(!el) return;
+  if(isDemoMode){ el.innerHTML='<div class="info-box">Squads need the live database.</div>'; return; }
+  if(SQUAD_LEGACY){ el.innerHTML='<div class="info-box">⚠️ Your database has not been upgraded for multiple squads yet. Run <b>iFiNeX v9.3 - Multi-squad.sql</b> once in Supabase → SQL Editor, then reload this page.</div>'; return; }
+  if(SQ_EDIT){ renderSquadEditor(el); return; }
+  const archived=SQUADS.filter(x=>x.is_archived).length;
+  const list=SQUADS.filter(x=>SQ_SHOW_ARCHIVED||!x.is_archived);
+  el.innerHTML=`<div class="info-box" style="margin-bottom:12px">🏘️ Every squad has its own people, expenses, balances and settlements. One person can be in many squads (Squad 4 = some people from Squad 1 + some from Squad 2). A member only sees the squads they are in.</div>`+
+    list.map(x=>`<div class="member-edit-card">
+      <div class="member-edit-top"><div class="member-big-av" style="background:${esc(x.color)}30;border:2px solid ${esc(x.color)}60">${esc(x.emoji)}</div>
+        <div><div class="member-edit-name">${esc(x.name)}${x.is_archived?' <span style="font-size:.7rem;color:var(--muted)">(archived)</span>':''}${x.id===ACTIVE_SQUAD?' <span class="admin-badge">OPEN</span>':''}</div>
+        <div class="member-edit-role">${esc(x.member_ids.length)} people</div></div></div>
+      <div style="margin:8px 0;font-size:.85rem;line-height:1.7">${x.member_ids.map(id=>{const p=ALL_PEOPLE.find(q=>q.id===id);return p?esc(p.emoji)+' '+esc(p.name):'';}).filter(Boolean).join(' · ')||'—'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-save-member" style="flex:1" onclick="editSquad(${esc(x.id)})">✏️ Edit / add people</button>
+        <button class="btn-save-member" style="flex:1;background:var(--card2);color:var(--text);border:1px solid var(--border)" onclick="switchSquad(${esc(x.id)});closeAdmin()">📂 Open</button>
+        <button onclick="sqArchive(${esc(x.id)},${x.is_archived?'false':'true'})" style="padding:8px 14px;border-radius:10px;border:1px solid var(--border);background:var(--card2);color:var(--text);font-weight:800;cursor:pointer">${x.is_archived?'♻️ Restore':'🗄️ Archive'}</button>
+      </div></div>`).join('')+
+    `<button class="sq-dash" onclick="editSquad(null)">➕ Create new squad</button>`+
+    (archived?`<button class="sq-dash" style="color:var(--muted);font-size:.85rem" onclick="SQ_SHOW_ARCHIVED=!SQ_SHOW_ARCHIVED;renderAdminSquads()">${SQ_SHOW_ARCHIVED?'Hide':'Show'} archived squads (${esc(archived)})</button>`:'');
+}
+function editSquad(id){
+  const x=id==null?null:sqById(id);
+  SQ_EDIT={id:x?x.id:null,name:x?x.name:'',emoji:x?x.emoji:'👥',color:x?x.color:COLORS[SQUADS.length%COLORS.length],members:x?x.member_ids.slice():[]};
+  const tab=document.querySelector('.admin-tab[data-t="squads"]'); if(tab) adminTab('squads',tab);
+  renderAdminSquads();
+}
+function sqSyncEdit(){
+  if(!SQ_EDIT) return; const n=document.getElementById('sqe-name'); if(!n) return;
+  SQ_EDIT.name=n.value; SQ_EDIT.emoji=document.getElementById('sqe-emoji').value; SQ_EDIT.color=document.getElementById('sqe-color').value;
+}
+function renderSquadEditor(el){
+  const e=SQ_EDIT, people=poolPeople();
+  el.innerHTML=`<div class="section-title" style="margin-top:0;font-size:1rem">${e.id==null?'➕ New squad':'✏️ Edit squad'}</div>
+    <div class="card">
+      <div class="edit-row">
+        <div><div class="edit-label">Squad name</div><input class="edit-inp" id="sqe-name" maxlength="60" value="${esc(e.name)}" placeholder="e.g. Squad 2 · Weekend trip" /></div>
+        <div><div class="edit-label">Icon</div><select class="edit-inp" id="sqe-emoji">${SQ_EMOJIS.map(x=>`<option value="${esc(x)}" ${x===e.emoji?'selected':''}>${esc(x)}</option>`).join('')}</select></div>
+      </div>
+      <div class="edit-row"><div><div class="edit-label">Colour</div><select class="edit-inp" id="sqe-color">${COLORS.map(c=>`<option value="${esc(c)}" ${c===e.color?'selected':''}>${esc(c)}</option>`).join('')}</select></div><div></div></div>
+    </div>
+    <div class="section-title" style="font-size:.95rem">👥 People in this squad <span style="color:var(--muted);font-size:.75rem">(${esc(e.members.length)} selected · tap to add / remove)</span></div>
+    <div class="card">${people.map(p=>{const on=e.members.includes(p.id);return `<span class="sq-chip ${on?'on':''}" onclick="sqToggle('${esc(jsq(p.id))}')">${esc(p.emoji)} ${esc(p.name)}${on?' ✓':''}</span>`;}).join('')||'<span style="color:var(--muted)">No people yet — add one below.</span>'}</div>
+    <div class="section-title" style="font-size:.95rem">🆕 Add a new person</div>
+    <div class="card">
+      <div class="edit-row">
+        <div><div class="edit-label">Name</div><input class="edit-inp" id="np-name" maxlength="60" placeholder="Full name" /></div>
+        <div><div class="edit-label">E-mail (to log in)</div><input class="edit-inp" id="np-email" type="email" placeholder="name@example.com" /></div>
+      </div>
+      <div class="edit-row"><div><div class="edit-label">Emoji</div><select class="edit-inp" id="np-emoji">${EMOJIS.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('')}</select></div><div></div></div>
+      <div style="font-size:.7rem;color:var(--muted);margin-bottom:8px">With an e-mail the person can log in to Squad Split (it is registered for you). Without one they are a name only: they can be in splits but cannot log in. The same e-mail is never added twice — the existing person is reused.</div>
+      <button class="btn-save-member" style="margin-top:0" onclick="sqNewPerson()">➕ Add person &amp; select</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="btn-save-member" style="flex:2;margin-top:0" onclick="saveSquadEdit()">💾 Save squad</button>
+      <button class="btn-save-member" style="flex:1;margin-top:0;background:var(--card2);color:var(--text);border:1px solid var(--border)" onclick="SQ_EDIT=null;renderAdminSquads()">Cancel</button>
+    </div>`;
+}
+function sqToggle(id){
+  sqSyncEdit(); const i=SQ_EDIT.members.indexOf(id);
+  if(i>-1) SQ_EDIT.members.splice(i,1); else SQ_EDIT.members.push(id);
+  renderAdminSquads();
+}
+async function sqNewPerson(){
+  sqSyncEdit();
+  const name=document.getElementById('np-name').value.trim(), email=document.getElementById('np-email').value.trim(), emoji=document.getElementById('np-emoji').value;
+  if(!name){ alert('⚠️ Enter a name'); return; }
+  const color=COLORS[ALL_PEOPLE.length%COLORS.length];
+  const{data,error}=await sb.rpc('squad_add_person',{p_name:name,p_email:email,p_emoji:emoji,p_color:color});
+  if(error){ alert(sqErrMsg(error)); return; }
+  if(!ALL_PEOPLE.find(p=>p.id===data)) ALL_PEOPLE.push({id:data,name,email:email.toLowerCase(),emoji,color,is_admin:false,isAdmin:false,sort_order:ALL_PEOPLE.length});
+  if(!SQ_EDIT.members.includes(data)) SQ_EDIT.members.push(data);
+  renderAdminSquads(); showToast('✅ '+name+' selected — press Save squad to finish');
+}
+async function saveSquadEdit(){
+  sqSyncEdit(); const e=SQ_EDIT, name=(e.name||'').trim();
+  if(!name){ alert('⚠️ Give the squad a name'); return; }
+  if(!e.members.length){ alert('⚠️ Pick at least one person'); return; }
+  const{data,error}=await sb.rpc('squad_save',{p_id:e.id,p_name:name,p_emoji:e.emoji,p_color:e.color,p_members:e.members});
+  if(error){ alert(sqErrMsg(error)); return; }
+  if(e.id==null){ ACTIVE_SQUAD=data; try{ localStorage.setItem(sqPrefKey(),String(data)); }catch(x){} }   // a squad you just created opens straight away
+  SQ_EDIT=null;
+  await loadMembers(); await sqRefreshAll(); showToast('✅ Squad saved');
+}
+async function sqArchive(id,flag){
+  const x=sqById(id); if(!x) return;
+  if(!confirm(flag?`Archive ${x.name}? It is hidden from the switcher. Nothing is deleted and you can restore it.`:`Restore ${x.name}?`)) return;
+  const{error}=await sb.rpc('squad_set_archived',{p_id:id,p_archived:flag});
+  if(error){ alert(sqErrMsg(error)); return; }
+  if(flag&&id===ACTIVE_SQUAD){ ACTIVE_SQUAD=null; try{ localStorage.removeItem(sqPrefKey()); }catch(e){} }
+  await loadMembers(); await sqRefreshAll(); showToast(flag?'🗄️ Archived':'♻️ Restored');
 }
 
 // ── HELPERS ───────────────────────────────────

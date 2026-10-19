@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Google Drive · iFiNeX</title>
+<style>
+:root{--bg:#0f1020;--card:#181a30;--text:#e8ecff;--muted:#9aa3c7;--ok:#6bcb77;--bad:#ff6b6b;--accent:#4d96ff}
+@media (prefers-color-scheme:light){:root{--bg:#f3f5ff;--card:#fff;--text:#1a1c33;--muted:#5b6385}}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;box-sizing:border-box}
+.c{max-width:420px;width:100%;background:var(--card);border-radius:20px;padding:28px 22px;text-align:center;box-shadow:0 8px 30px rgba(0,0,0,.25)}
+.i{font-size:3rem}h1{font-size:1.25rem;margin:10px 0 6px}p{color:var(--muted);line-height:1.5;font-size:.92rem;margin:8px 0}
+a.b{display:block;margin-top:16px;padding:13px;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;text-decoration:none}
+</style></head><body><div class="c"><div class="i" id="i">☁️</div><h1 id="t">Google Drive</h1><p id="m"></p><a class="b" id="go" href="index.html">Open iFiNeX</a></div>
+<script>
+(function(){
+  var M={ok:['✅','Google Drive connected','You can close this tab and go back to the iFiNeX app. Your backup settings are waiting there.',1],
+    err_denied:['⚠️','Sign-in cancelled','You did not allow access. Go back to iFiNeX and try “Connect” again.'],
+    err_scope:['⚠️','Drive permission missing','On Google’s screen, keep the Google Drive box ticked, then connect again.'],
+    err_norefresh:['⚠️','Google did not allow offline access','Open myaccount.google.com/permissions, remove “iFiNeX”, then connect again.'],
+    err_state:['⚠️','This sign-in link expired','Go back to iFiNeX and tap Connect again.'],err_expired:['⚠️','Sign-in took too long','Go back to iFiNeX and tap Connect again.'],
+    err_token:['❌','Google refused the sign-in','The app owner must check the Google client id/secret on the server.'],err_google:['❌','Google reported an error','Go back to iFiNeX and try again.'],
+    err_server:['❌','Server error','Go back to iFiNeX and try again in a minute.'],err_nocode:['❌','No answer from Google','Go back to iFiNeX and try again.']};
+  var m=/[?&#]gdrive=(\w+)/.exec(location.search+location.hash), k=m&&M[m[1]]?m[1]:'err_google', v=M[k];
+  document.getElementById('i').textContent=v[0];document.getElementById('t').textContent=v[1];document.getElementById('m').textContent=v[2];
+})();
+</script></body></html>

@@ -6,7 +6,7 @@
    The JS never chooses a repo or a URL — that is fixed inside the app (see IfinexUpdatePlugin.java). Release notes are shown as plain text only. */
 (function (W, D) {
   'use strict';
-  var WEB_VER = '9.2';
+  var WEB_VER = '9.4';
   var LAST_KEY = 'ifx_upd_last', BANNER_KEY = 'ifx_upd_banner';
   var CHECK_EVERY_MS = 3 * 3600 * 1000;     // background check cadence
 

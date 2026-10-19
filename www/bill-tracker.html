@@ -388,7 +388,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="login-logo">
       <img class="logo-img" src="assets/ifinex-emblem-192.png" alt="" width="104" height="104" style="width:104px;height:104px;border-radius:50%;">
       <img src="assets/ifinex-wordmark.png" alt="iFiNeX" style="width:230px;max-width:72%;display:block;margin:6px auto 0;border-radius:12px;"><h1 style="position:absolute;left:-9999px;">iFiNeX</h1>
-      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v9.2 · app v2.8</small></p>
+      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v9.4 · app v2.10</small></p>
     </div>
 
     <div class="error-msg" id="login-error"></div>
@@ -472,7 +472,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <button class="drawer-item" id="btn-update" onclick="closeDrawer();ifxUpdate.open()">⬆️ Check for updates<span id="upd-dot"></span></button>
     <button class="drawer-item" id="btn-open-admin" style="display:none;" onclick="closeDrawer();openAdmin()">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.2 · app v2.8</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.4 · app v2.10</div>
   </aside>
 
   <!-- HOME -->
@@ -741,9 +741,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
   </div>
   <div class="admin-tabs">
     <button class="admin-tab-btn active" onclick="switchAdminTab('users')" id="atab-users">👥 Users</button>
-    <button class="admin-tab-btn" onclick="switchAdminTab('owed')" id="atab-owed">⚖️ Owed</button>
-    <button class="admin-tab-btn" onclick="switchAdminTab('spending')" id="atab-spending">📊 Spending</button>
-    <button class="admin-tab-btn" onclick="switchAdminTab('reports')" id="atab-reports">📧 Reports</button>
+    <button class="admin-tab-btn" onclick="switchAdminTab('owed')" id="atab-owed">⚖️ Owed to Admin</button>
   </div>
   <div class="admin-body">
 
@@ -774,6 +772,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
 
     <div class="admin-tab-page" id="atp-owed">
       <div class="card">
+        <p style="font-size:.78rem;color:var(--muted);margin-bottom:10px;">Charge ANY person an amount they owe you (it shows in their Bill Tracker → You Owe → Owed to Admin, where they or you can edit / delete it and record payments). To see someone's spending or statement use 📊 next to their name in the Users tab.</p>
         <div class="fg"><label>Person</label><select id="ow-user"></select></div>
         <div class="form-row">
           <div class="fg"><label>Amount (AED)</label><input type="number" id="ow-amount" step="0.01"></div>
@@ -783,17 +782,6 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
         <button class="btn-add" onclick="adminAddOwed()">+ Add Owed Entry</button>
       </div>
       <div id="admin-owed-list"></div>
-    </div>
-
-    <div class="admin-tab-page" id="atp-spending">
-      <div class="fg"><label>View spending for</label><select id="sp-user" onchange="loadAdminSpending()"></select></div>
-      <div id="admin-spending-list"></div>
-    </div>
-
-    <div class="admin-tab-page" id="atp-reports">
-      <div class="card">
-        <p style="font-size:.85rem;margin-bottom:12px;">Reports are viewed in-app now, not emailed — tap 📊 next to anyone in the Users tab to see their report live. Due-date reminders go out as push notifications instead (Cards page → 🔔 Enable notifications, per person).</p>
-      </div>
     </div>
 
   </div>
@@ -3080,8 +3068,6 @@ async function loadAllUsers(){
   renderAdminUsers();
   const opts = allUsers.map(u=>`<option value="${esc(u.email)}">${escapeHtml(u.name)} (${esc(u.email)})</option>`).join('');
   document.getElementById('ow-user').innerHTML = opts;
-  document.getElementById('sp-user').innerHTML = opts;
-  if(allUsers.length) loadAdminSpending();
 }
 function renderAdminUsers(){
   const el=document.getElementById('admin-users-list');
@@ -3188,15 +3174,6 @@ async function loadAdminOwedList(){
 }
 document.addEventListener('DOMContentLoaded',()=>{ /* placeholder no-op to keep load order simple */ });
 
-async function loadAdminSpending(){
-  const email=document.getElementById('sp-user').value;
-  if(!email) return;
-  const { data } = await sb.from('bill_expenses').select('*').ilike('user_email',email).order('date',{ascending:false}).limit(60);
-  const el=document.getElementById('admin-spending-list');
-  el.innerHTML = (data||[]).length ? data.map(x=>`
-    <div class="exp-item-card"><div class="exp-icon">${esc(CAT_ICONS[x.category])||'📦'}</div><div style="flex:1;"><div class="exp-name">${escapeHtml(x.description)}</div><div class="exp-meta">${esc(x.date)}</div></div><div style="font-weight:800;">${dhs(x.amount)}</div></div>
-  `).join('') : `<div class="empty-state"><span>📊</span>No spending logged yet</div>`;
-}
 // load owed list when that admin tab is first opened
 const _origSwitchAdminTab = switchAdminTab;
 switchAdminTab = function(name){ _origSwitchAdminTab(name); if(name==='owed') loadAdminOwedList(); };
