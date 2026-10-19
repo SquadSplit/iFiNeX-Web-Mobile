@@ -388,7 +388,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="login-logo">
       <img class="logo-img" src="assets/ifinex-emblem-192.png" alt="" width="104" height="104" style="width:104px;height:104px;border-radius:50%;">
       <img src="assets/ifinex-wordmark.png" alt="iFiNeX" style="width:230px;max-width:72%;display:block;margin:6px auto 0;border-radius:12px;"><h1 style="position:absolute;left:-9999px;">iFiNeX</h1>
-      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v9.1 · app v2.7</small></p>
+      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v9.2 · app v2.8</small></p>
     </div>
 
     <div class="error-msg" id="login-error"></div>
@@ -472,7 +472,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <button class="drawer-item" id="btn-update" onclick="closeDrawer();ifxUpdate.open()">⬆️ Check for updates<span id="upd-dot"></span></button>
     <button class="drawer-item" id="btn-open-admin" style="display:none;" onclick="closeDrawer();openAdmin()">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.1 · app v2.7</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.2 · app v2.8</div>
   </aside>
 
   <!-- HOME -->
@@ -3544,7 +3544,7 @@ function openCardMenu(id){
 }
 async function removeShareFromMenu(sid,cid){ await sb.from('bill_card_shares').delete().eq('id',sid); toast('Access removed'); await loadMyData(); openCardMenu(cid); }
 // deep links from Squad Split drawer (#et, #theme)
-(function(){ if(!location.hash) return; const h=location.hash; const t=setInterval(()=>{ try{ if(typeof managing!=='undefined'&&managing&&document.getElementById('screen-app')&&document.getElementById('screen-app').classList.contains('active')){ clearInterval(t); if(h==='#et') switchPage('et'); if(h==='#theme') openAppearance(); if(h==='#alerts') openAlerts(); } }catch(e){} },500); setTimeout(()=>clearInterval(t),20000); })();
+(function(){ if(!location.hash) return; const h=location.hash; try{ history.replaceState(null,'',location.pathname+location.search); }catch(e){} /* v9.2: consume the deep link once; a stale #et must never override the Hub on the next start */ const t=setInterval(()=>{ try{ if(typeof managing!=='undefined'&&managing&&document.getElementById('screen-app')&&document.getElementById('screen-app').classList.contains('active')){ clearInterval(t); if(h==='#et') switchPage('et'); if(h==='#theme') openAppearance(); if(h==='#alerts') openAlerts(); } }catch(e){} },500); setTimeout(()=>clearInterval(t),20000); })();
 
 // v8.1 SECURITY: escape & < > " ' (the old escapeHtml left quotes alone, which is unsafe inside HTML attributes)
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }

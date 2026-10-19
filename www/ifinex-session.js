@@ -91,6 +91,7 @@
   W.ifxIsFatalAuth = isFatal;
 
   function overlay(html) {
+    if (!document.getElementById('ifx-kf')) { var st = document.createElement('style'); st.id = 'ifx-kf'; st.textContent = '@keyframes ifxpulse{0%,100%{opacity:.88}50%{opacity:1}}@keyframes ifxin{to{opacity:1}}'; (document.head || document.documentElement).appendChild(st); }   // v9.2: keyframes live in <head> (they used to sit inside the overlay and vanished when the overlay text was replaced -> the "can't reach the server" screen stayed invisible)
     var el = document.getElementById('ifx-boot');
     if (!el) {
       el = document.createElement('div'); el.id = 'ifx-boot';
@@ -99,14 +100,16 @@
     }
     el.innerHTML = html; return el;
   }
+  function logoImg() { return '<img src="assets/ifinex-splash-logo.png" alt="iFiNeX" style="position:absolute;left:50%;top:50%;width:min(240px,68vw);height:auto;transform:translate(-50%,-50%);animation:ifxpulse 1.6s ease-in-out infinite;">'; }
   W.ifxBootHide = function () { var el = document.getElementById('ifx-boot'); if (el) el.remove(); };
   W.ifxBootSplash = function (msg) {
-    overlay('<img src="assets/ifinex-emblem-192.png" alt="" style="width:92px;height:92px;border-radius:50%;animation:ifxpulse 1.3s ease-in-out infinite;">' +
-      '<div style="font-weight:800;font-size:.95rem;">' + (msg || 'Restoring your session…') + '</div>' +
-      '<style>@keyframes ifxpulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.08);opacity:1}}@keyframes ifxin{to{opacity:1}}</style>');
+    // v9.2: the SAME logo picture as the Android launch screen (emblem exactly in the screen centre, wordmark below) - no jump between the two
+    overlay(logoImg() +
+      '<div style="position:absolute;left:0;right:0;top:calc(50% + min(240px,68vw)*.755 + 14px);font-weight:700;font-size:.85rem;color:#9aa3c7;padding:0 24px;">' + (msg || 'Restoring your session…') + '</div>' +
+      '');
   };
   W.ifxBootOffline = function (retry, why) {
-    var el = overlay('<img src="assets/ifinex-emblem-192.png" alt="" style="width:80px;height:80px;border-radius:50%;opacity:.8;">' +
+    var el = overlay('<img src="assets/ifinex-splash-logo.png" alt="iFiNeX" style="width:150px;height:auto;opacity:.9;margin-top:-60px;">' +
       '<div style="font-weight:800;font-size:1rem;">Can\'t reach the server</div>' +
       '<div style="font-size:.8rem;opacity:.75;max-width:300px;">You are still signed in. Check your internet connection and try again — you will NOT have to log in again.</div>' +
       (why ? '<div style="font-size:.66rem;opacity:.5;max-width:300px;word-break:break-word;"></div>' : '') +
