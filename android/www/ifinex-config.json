@@ -1,0 +1,8 @@
+{
+  "format": "ifinex-server",
+  "version": 1,
+  "name": "iFiNeX \u00b7 Squad Split Hub",
+  "site": "https://squadsplit.github.io",
+  "supabaseUrl": "https://lznnetxeklmdrykxtsbm.supabase.co",
+  "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6bm5ldHhla2xtZHJ5a3h0c2JtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTIxMDMsImV4cCI6MjA4ODk4ODEwM30.cD_n9iCvTTkwgtwh2Qt8Ux9iJR2OfkgCutC2eif8JQo"
+}
