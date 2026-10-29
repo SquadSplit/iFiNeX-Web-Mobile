@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- In-app updater: the GitHub repository that BUILDS this app and publishes its APK under Releases (must be PUBLIC). The GitHub workflow also sets this to its own repository on every build. -->
-    <string name="ifinex_update_repo" translatable="false">SquadSplit/iFiNeX-V2.4.0-Mobile</string>
+    <string name="ifinex_update_repo" translatable="false">SquadSplit/iFiNeX-Mobile</string>
     <!-- picks the right .apk when (legacy) one release holds several apps: the file name must contain this word -->
     <string name="ifinex_update_edition" translatable="false">app</string>
 </resources>

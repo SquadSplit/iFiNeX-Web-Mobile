@@ -1,0 +1,12 @@
+{
+	"appId": "io.github.squadsplit.app",
+	"appName": "iFiNeX",
+	"webDir": "www",
+	"backgroundColor": "#0b0b18",
+	"plugins": {
+		"LocalNotifications": {
+			"smallIcon": "ic_stat_ifinex",
+			"iconColor": "#4D96FF"
+		}
+	}
+}

@@ -163,7 +163,7 @@ public class IfinexUpdatePlugin extends Plugin {
         String cur = url;
         for (int hop = 0; hop < 6; hop++) {
             URL u = new URL(cur);
-            if (!hostOk(u) && !(u.getHost() != null && u.getHost().equalsIgnoreCase("api.github.com") && "https".equalsIgnoreCase(u.getProtocol()) && hop == 0))
+            if (!hostOk(u) && !(u.getHost() != null && u.getHost().equalsIgnoreCase("api.github.com") && "https".equalsIgnoreCase(u.getProtocol())))   // v2.8: api.github.com is allowed on EVERY hop - a renamed repository answers with a 301 to api.github.com/repositories/<id>/...
                 throw new Exception("blocked_host");
             HttpURLConnection c = (HttpURLConnection) u.openConnection();
             c.setInstanceFollowRedirects(false);
