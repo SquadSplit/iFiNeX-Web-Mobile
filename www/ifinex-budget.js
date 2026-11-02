@@ -22,6 +22,18 @@
   var root = null, owner = function () { return managing.email; }, actor = function () { return me.email; };
   var low = function (s) { return String(s == null ? '' : s).trim().toLowerCase(); };
   var thisMonth = function () { return localMonthStr(new Date()); };
+  // v9.8 filters: shared state with the lifecycle module (status tabs, date mode, category)
+  var LC = function () { return W.ifxLC; };
+  var FS = function () { return LC() ? LC().state('bp') : { view: 'all', mode: 'month', month: '', from: '', to: '', cat: 'all' }; };
+  function inScope(month) {                                             // does this budget month fall inside the chosen dates?
+    var f = FS(); if (f.mode === 'all') return true;
+    if (f.mode === 'range') return (!f.from || month >= f.from.slice(0, 7)) && (!f.to || month <= f.to.slice(0, 7));
+    return month === S.month;
+  }
+  var effOf = function (kind, r) { return LC() ? LC().eff(kind, r) : 'active'; };
+  var viewOk = function (kind, r) { var v = FS().view; return v === 'all' || effOf(kind, r) === v; };
+  var dots = function (kind, id) { return LC() ? LC().dots(kind, id) : ''; };
+  var badge = function (kind, r) { return LC() ? LC().badge(kind, r) : ''; };
   function shiftMonth(m, d) { var p = m.split('-').map(Number), x = new Date(p[0], p[1] - 1 + d, 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0'); }
   function monthLabel(m) { var p = m.split('-').map(Number); return new Date(p[0], p[1] - 1, 1).toLocaleString('en', { month: 'long', year: 'numeric' }); }
   function toast(m) { if (W.toast) W.toast(m); }
@@ -77,12 +89,19 @@
   // ---------- paint ----------
   function paint() {
     if (!root) return; if (S.loading && !S.ready) { root.innerHTML = '<div class="card"><p style="color:var(--muted);">Loading…</p></div>'; return; }
-    var m = S.month, inc = S.income.filter(function (x) { return x.month === m; }), its = S.items.filter(function (x) { return x.month === m; });
+    var m = S.month, inc = S.income.filter(function (x) { return x.month === m; }), its = S.items.filter(function (x) { return x.month === m; }), f = FS();
+    var sInc = S.income.filter(function (x) { return inScope(x.month); }), sIts = S.items.filter(function (x) { return inScope(x.month) && (f.cat === 'all' || x.category === f.cat); });
+    var sGoals = S.goals.filter(function (g) { return f.mode !== 'range' || !g.due_date || (LC() ? LC().overlap(f, g.due_date, g.due_date) : true); });   // goals are long-lived: only a custom date range narrows them (by target date)
+    var kindOf = S.tab === 'salary' ? 'income' : S.tab === 'goals' ? 'goal' : 'item', pool = S.tab === 'salary' ? sInc : S.tab === 'goals' ? sGoals : sIts;
+    var counts = { active: pool.filter(function (x) { return effOf(kindOf, x) === 'active'; }).length, completed: pool.filter(function (x) { return effOf(kindOf, x) === 'completed'; }).length, all: pool.length };
+    var cats = []; S.items.forEach(function (x) { if (inScope(x.month) && cats.indexOf(x.category) < 0) cats.push(x.category); }); cats.sort();
+    var filt = (S.tab === 'overview' || !LC()) ? '' : LC().bar('bp', { noMonth: true, counts: counts, cats: S.tab === 'budget' ? cats : null, catLabel: 'budget lines' });
+    sInc = sInc.filter(function (x) { return viewOk('income', x); }); sIts = sIts.filter(function (x) { return viewOk('item', x); }); sGoals = sGoals.filter(function (g) { return viewOk('goal', g); });
     var head = '<div class="section-title">💰 Budget &amp; Salary Planner</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;"><button class="btn-tiny" data-act="m-" aria-label="Previous month">‹</button><b style="font-size:.95rem;">' + esc(monthLabel(m)) + '</b><button class="btn-tiny" data-act="m+" aria-label="Next month">›</button></div>' +
       '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' + X.button(S.tab==='budget'?'bp_items':S.tab==='goals'?'bp_goals':'bp_income', 'Import / Export / Template') + '</div>' +
       '<div class="ptabs">' + [['overview', '📊 Overview'], ['salary', '💼 Salary'], ['budget', '🎯 Budget'], ['goals', '🏆 Goals']].map(function (t) { return '<button class="ptab ' + (S.tab === t[0] ? 'on' : '') + '" data-act="tab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
-    root.innerHTML = head + (S.tab === 'overview' ? vOverview(inc, its) : S.tab === 'salary' ? vSalary(inc) : S.tab === 'budget' ? vBudget(its) : vGoals());
+    root.innerHTML = head + filt + (S.tab === 'overview' ? vOverview(inc, its) : S.tab === 'salary' ? vSalary(inc, sInc) : S.tab === 'budget' ? vBudget(sIts, its) : vGoals(sGoals));
   }
   function bar(pct, over) { return '<div class="et-bar" style="height:8px;"><i style="width:' + Math.min(100, Math.max(0, pct)) + '%;' + (over ? 'background:linear-gradient(90deg,#FF6B6B,#FF9D6B);' : '') + '"></i></div>'; }
   function stat(label, val, color) { return '<div class="plan-stat" style="' + (color ? 'color:' + color : '') + '">' + esc(label) + '<b>' + esc(val) + '</b></div>'; }
@@ -102,10 +121,10 @@
     return h;
   }
 
-  function vSalary(inc) {
-    var income = sum(inc, 'amount'), base = income || 0, tot = Object.keys(S.split).reduce(function (t, k) { return t + Number(S.split[k]); }, 0);
-    var h = '<div class="card"><div class="section-title" style="font-size:1rem;">💼 Income — ' + esc(monthLabel(S.month)) + '</div>' +
-      (inc.length ? inc.map(function (x) { return '<div class="et-row" data-ifx-k="in' + esc(x.id) + '" data-ifx-amt="' + esc(x.amount) + '" data-ifx-label="' + esc(x.source) + '" data-ifx-date="' + esc(x.pay_date || x.month) + '"><span style="flex:1;min-width:0;"><b>' + esc(x.source) + '</b><small style="color:var(--muted)"> · ' + esc(x.kind) + (x.pay_date ? ' · ' + esc(x.pay_date) : '') + '</small></span><b>' + esc(fmt(x.amount)) + '</b><button class="btn-tiny ghost" data-act="in-edit" data-id="' + esc(x.id) + '">✏️</button><button class="btn-tiny ghost" data-act="in-del" data-id="' + esc(x.id) + '">✕</button></div>'; }).join('') + '<div class="et-row"><span style="flex:1"><b>Total income</b></span><b>' + esc(money(income)) + '</b></div>' : '<p style="color:var(--muted);font-size:.8rem;">No income added for this month.</p>') +
+  function vSalary(inc, list) {
+    var income = sum(inc, 'amount'), base = income || 0, shown = sum(list, 'amount'), tot = Object.keys(S.split).reduce(function (t, k) { return t + Number(S.split[k]); }, 0);
+    var h = '<div class="card"><div class="section-title" style="font-size:1rem;">💼 Income — ' + esc(FS().mode === 'month' ? monthLabel(S.month) : FS().mode === 'range' ? 'selected dates' : 'all months') + '</div>' +
+      (list.length ? list.map(function (x) { return '<div class="et-row" data-ifx-k="in' + esc(x.id) + '" data-ifx-amt="' + esc(x.amount) + '" data-ifx-label="' + esc(x.source) + '" data-ifx-date="' + esc(x.pay_date || x.month) + '"><span style="flex:1;min-width:0;"><b>' + esc(x.source) + '</b><small style="color:var(--muted)"> · ' + esc(x.kind) + (x.pay_date ? ' · ' + esc(x.pay_date) : '') + '</small>' + badge('income', x) + '</span><b>' + esc(fmt(x.amount)) + '</b>' + dots('income', x.id) + '</div>'; }).join('') + '<div class="et-row"><span style="flex:1"><b>Total shown</b></span><b>' + esc(money(shown)) + '</b></div>' : '<p style="color:var(--muted);font-size:.8rem;">' + (inc.length || S.income.length ? 'Nothing matches these filters.' : 'No income added for this month.') + '</p>') +
       '<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"><button class="btn-add" style="flex:1;margin:0;" data-act="in-add">➕ Add income</button><button class="btn-tiny" data-act="in-copy">Copy last month</button></div></div>';
     h += '<div class="card"><div class="section-title" style="font-size:1rem;">🧮 Salary split calculator</div><div style="font-size:.74rem;color:var(--muted);margin-bottom:8px;">Based on this month\'s income: <b>' + esc(money(base)) + '</b>. Change the percentages, check the preview, then create your budget lines in one tap.</div><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">' +
       Object.keys(S.split).map(function (k) { return '<div><label style="font-size:.64rem;color:var(--muted);">' + BUCKETS[k][0] + ' ' + BUCKETS[k][1] + ' %</label><input type="number" min="0" max="100" inputmode="numeric" data-split="' + k + '" value="' + esc(S.split[k]) + '" style="width:100%;padding:9px;border-radius:9px;border:1px solid var(--border);background:var(--card2);color:inherit;"></div>'; }).join('') + '</div>' +
@@ -116,29 +135,29 @@
   }
   function allocation() { var out = []; Object.keys(S.split).forEach(function (b) { var bp = Number(S.split[b]) || 0; if (!bp) return; (LINES[b] || []).forEach(function (l) { out.push({ bucket: b, category: l[0], pct: bp * l[1] / 100 }); }); }); return out; }
 
-  function vBudget(its) {
-    var A = actuals(S.month), h = '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;"><button class="btn-add" style="flex:1;margin:0;" data-act="it-add">➕ Add budget line</button><button class="btn-tiny" data-act="it-copy">Copy last month</button></div>';
-    if (!its.length) return h + '<div class="card"><p style="color:var(--muted);margin:0;">No budget lines for this month. Add one, copy last month, or use the split calculator in 💼 Salary.</p></div>';
+  function vBudget(its, monthIts) {
+    var AC = {}, acts = function (mo) { return AC[mo] || (AC[mo] = actuals(mo)); }, A = acts(S.month), h = '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;"><button class="btn-add" style="flex:1;margin:0;" data-act="it-add">➕ Add budget line</button><button class="btn-tiny" data-act="it-copy">Copy last month</button></div>';
+    if (!its.length) return h + '<div class="card"><p style="color:var(--muted);margin:0;">' + (S.items.length ? 'Nothing matches these filters — check the Completed tab, another month, or reset the filters.' : 'No budget lines for this month. Add one, copy last month, or use the split calculator in 💼 Salary.') + '</p></div>';
     Object.keys(BUCKETS).forEach(function (b) {
       var rows = its.filter(function (x) { return x.bucket === b; }); if (!rows.length) return;
       h += '<div class="card"><div class="section-title" style="font-size:1rem;display:flex;justify-content:space-between;"><span>' + BUCKETS[b][0] + ' ' + BUCKETS[b][1] + '</span><span>' + esc(money(sum(rows, 'planned'))) + '</span></div>' + rows.map(function (x) {
-        var a = A.by[low(x.category)] || 0, p = Number(x.planned), pct = p > 0 ? a / p * 100 : (a > 0 ? 100 : 0), over = a > p && b !== 'savings';
-        return '<div style="margin-bottom:11px;" data-ifx-k="it' + esc(x.id) + '" data-ifx-amt="' + esc(x.planned) + '" data-ifx-label="' + esc(x.category) + '" data-ifx-date="' + esc(x.month) + '"><div style="display:flex;justify-content:space-between;gap:6px;font-size:.8rem;"><b>' + esc(x.category) + '</b><span>' + esc(fmt(a)) + ' / ' + esc(fmt(p)) + '</span></div>' + bar(pct, over) + '<div style="display:flex;justify-content:space-between;font-size:.66rem;color:' + (over ? '#FF6B6B' : 'var(--muted)') + ';margin-top:2px;"><span>' + (over ? esc(fmt(a - p)) + ' over' : esc(fmt(p - a)) + ' left') + '</span><span><button class="btn-tiny ghost" data-act="it-edit" data-id="' + esc(x.id) + '">✏️</button> <button class="btn-tiny ghost" data-act="it-del" data-id="' + esc(x.id) + '">✕</button></span></div></div>';
+        var a = acts(x.month).by[low(x.category)] || 0, p = Number(x.planned), pct = p > 0 ? a / p * 100 : (a > 0 ? 100 : 0), over = a > p && b !== 'savings';
+        return '<div style="margin-bottom:11px;" data-ifx-k="it' + esc(x.id) + '" data-ifx-amt="' + esc(x.planned) + '" data-ifx-label="' + esc(x.category) + '" data-ifx-date="' + esc(x.month) + '"><div style="display:flex;justify-content:space-between;gap:6px;font-size:.8rem;align-items:center;"><b>' + esc(x.category) + (FS().mode !== 'month' ? '<small style="color:var(--muted);font-weight:400"> · ' + esc(x.month) + '</small>' : '') + '</b><span>' + esc(fmt(a)) + ' / ' + esc(fmt(p)) + dots('item', x.id) + '</span></div>' + badge('item', x) + bar(pct, over) + '<div style="display:flex;justify-content:space-between;font-size:.66rem;color:' + (over ? '#FF6B6B' : 'var(--muted)') + ';margin-top:2px;"><span>' + (over ? esc(fmt(a - p)) + ' over' : esc(fmt(p - a)) + ' left') + '</span><span></span></div></div>';
       }).join('') + '</div>';
     });
-    var matched = new Set(its.map(function (x) { return low(x.category); })), un = Object.keys(A.by).filter(function (k) { return !matched.has(k); });
-    if (un.length) h += '<div class="card"><div class="section-title" style="font-size:1rem;">Spent without a budget line</div>' + un.map(function (k) { return '<div class="et-row"><span style="flex:1">' + esc(k) + '</span><b>' + esc(money(A.by[k])) + '</b></div>'; }).join('') + '</div>';
+    var matched = new Set(monthIts.map(function (x) { return low(x.category); })), un = Object.keys(A.by).filter(function (k) { return !matched.has(k); });
+    if (un.length && FS().mode === 'month' && FS().view !== 'completed') h += '<div class="card"><div class="section-title" style="font-size:1rem;">Spent without a budget line</div>' + un.map(function (k) { return '<div class="et-row"><span style="flex:1">' + esc(k) + '</span><b>' + esc(money(A.by[k])) + '</b></div>'; }).join('') + '</div>';
     return h;
   }
 
-  function vGoals() {
+  function vGoals(goals) {
     var h = '<button class="btn-add" style="margin-bottom:12px;" data-act="g-add">➕ New savings goal</button>';
-    if (!S.goals.length) return h + '<div class="card"><p style="color:var(--muted);margin:0;">Goals like “Emergency fund” or “Umrah trip” show how much to save each month.</p></div>';
+    if (!goals.length) return h + '<div class="card"><p style="color:var(--muted);margin:0;">' + (S.goals.length ? 'Nothing matches these filters — check the Completed tab or reset the filters.' : 'Goals like “Emergency fund” or “Umrah trip” show how much to save each month.') + '</p></div>';
     var now = new Date();
-    return h + S.goals.map(function (g) {
+    return h + goals.map(function (g) {
       var t = Number(g.target), sv = Number(g.saved), pct = Math.round(sv / t * 100), need = '';
       if (g.due_date) { var d = new Date(g.due_date + 'T00:00:00'), mths = Math.max(1, (d.getFullYear() - now.getFullYear()) * 12 + d.getMonth() - now.getMonth() + (d.getDate() >= now.getDate() ? 1 : 0)); need = sv >= t ? '' : ' · save ' + fmt((t - sv) / mths) + ' / month'; }
-      return '<div class="card" data-ifx-k="g' + esc(g.id) + '" data-ifx-amt="' + esc(g.target) + '" data-ifx-label="' + esc(g.name) + '" data-ifx-date="' + esc(g.due_date || '') + '"><div style="display:flex;justify-content:space-between;gap:8px;"><b>🏆 ' + esc(g.name) + '</b><b>' + esc(pct) + '%</b></div>' + bar(pct) + '<div style="font-size:.72rem;color:var(--muted);margin:4px 0 8px;">' + esc(fmt(sv)) + ' of ' + esc(fmt(t)) + (g.due_date ? ' · by ' + esc(g.due_date) : '') + esc(need) + (sv >= t ? ' · ✅ reached' : '') + '</div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn-tiny" data-act="g-add-money" data-id="' + esc(g.id) + '">+ Add money</button><button class="btn-tiny ghost" data-act="g-edit" data-id="' + esc(g.id) + '">✏️ Edit</button><button class="btn-tiny ghost" data-act="g-del" data-id="' + esc(g.id) + '">🗑️</button></div></div>';
+      return '<div class="card" data-ifx-k="g' + esc(g.id) + '" data-ifx-amt="' + esc(g.target) + '" data-ifx-label="' + esc(g.name) + '" data-ifx-date="' + esc(g.due_date || '') + '"><div style="display:flex;justify-content:space-between;gap:8px;"><b>🏆 ' + esc(g.name) + '</b><b>' + esc(pct) + '%</b></div>' + bar(pct) + '<div style="font-size:.72rem;color:var(--muted);margin:4px 0 8px;">' + esc(fmt(sv)) + ' of ' + esc(fmt(t)) + (g.due_date ? ' · by ' + esc(g.due_date) : '') + esc(need) + (sv >= t ? ' · ✅ reached' : '') + '</div><div style="display:flex;gap:6px;flex-wrap:wrap;"><button class="btn-tiny" data-act="g-add-money" data-id="' + esc(g.id) + '">+ Add money</button>' + dots('goal', g.id) + '</div>' + badge('goal', g) + '</div>';
     }).join('');
   }
 
@@ -148,8 +167,9 @@
   var base = function () { return { user_email: owner(), created_by_email: actor() }; };
   var num = function (v) { var n = Number(String(v).replace(/,/g, '')); return isFinite(n) ? n : NaN; };
 
+  function pickView() { var f = FS(); if (LC() && f.mode === 'month') f.view = S.month < thisMonth() ? 'completed' : 'active'; }   // a finished month lives under Completed
   var ACT = {
-    'm-': function () { S.month = shiftMonth(S.month, -1); paint(); }, 'm+': function () { S.month = shiftMonth(S.month, 1); paint(); },
+    'm-': function () { S.month = shiftMonth(S.month, -1); pickView(); paint(); }, 'm+': function () { S.month = shiftMonth(S.month, 1); pickView(); paint(); },
     tab: function (el) { S.tab = el.getAttribute('data-v'); paint(); },
     'in-add': async function () { var v = await ask('Add income — ' + monthLabel(S.month), [{ k: 'source', label: 'Source', ph: 'e.g. Company salary' }, { k: 'kind', label: 'Type', options: KINDS, val: 'salary' }, { k: 'amount', label: 'Amount (AED)', type: 'number' }, { k: 'pay_date', label: 'Pay date (optional)', type: 'date' }]); if (!v) return; var a = num(v.amount); if (!v.source || !(a >= 0)) return toast('Enter a source and an amount'); await run(sb.from('bp_income').insert(Object.assign(base(), { month: S.month, source: v.source.slice(0, 120), kind: v.kind, amount: a, pay_date: v.pay_date || null })), 'Income added ✓'); },
     'in-edit': async function (el) { var x = byId(S.income, el.getAttribute('data-id')); if (!x) return; var v = await ask('Edit income', [{ k: 'source', label: 'Source', val: x.source }, { k: 'kind', label: 'Type', options: KINDS, val: x.kind }, { k: 'amount', label: 'Amount (AED)', type: 'number', val: x.amount }, { k: 'pay_date', label: 'Pay date', type: 'date', val: x.pay_date || '' }]); if (!v) return; var a = num(v.amount); if (!v.source || !(a >= 0)) return toast('Enter a source and an amount'); await run(sb.from('bp_income').update({ source: v.source.slice(0, 120), kind: v.kind, amount: a, pay_date: v.pay_date || null }).eq('id', x.id), 'Saved ✓'); },
@@ -202,9 +222,18 @@
     insert: function (rows) { return ins('bp_goals', rows.map(function (r) { return { name: r.name, target: r.target, saved: r.saved || 0, due_date: r.due_date || null, note: r.note || '' }; })); }, after: load
   });
 
+  // ---------- ⋯ menu (Edit · Mark completed · Delete) for income, budget lines and goals ----------
+  function fake(id) { return { getAttribute: function (k) { return k === 'data-id' ? String(id) : null; } }; }
+  function regLC() {
+    if (!W.ifxLC || regLC.done) return; regLC.done = 1;
+    var reg = function (kind, arr, edit, del) { W.ifxLC.register(kind, { get: function (id) { return byId(S[arr], id); }, edit: function (id) { ACT[edit](fake(id)); }, del: function (id) { ACT[del](fake(id)); }, after: paint }); };
+    reg('income', 'income', 'in-edit', 'in-del'); reg('item', 'items', 'it-edit', 'it-del'); reg('goal', 'goals', 'g-edit', 'g-del');
+    W.ifxLC.onChange('bp', paint);
+  }
+
   // ---------- mount ----------
   W.ifxBudget = {
-    enter: function () { if (!root) mount(); if (!S.month) S.month = thisMonth(); load(); },
+    enter: function () { regLC(); if (!root) mount(); if (!S.month) S.month = thisMonth(); load(); },
     reset: function () { S.ready = false; S.income = []; S.items = []; S.goals = []; if (root) root.innerHTML = ''; }
   };
   function mount() {
@@ -219,7 +248,7 @@
   }
   // make the page + drawer entry exist from the start; load data when the page is opened
   function boot() {
-    if (!D.getElementById('page-et')) return; mount();
+    regLC(); if (!D.getElementById('page-et')) return; mount();
     var sp = W.switchPage; if (typeof sp === 'function' && !sp._bp) { var g = function (name) { var r = sp.apply(this, arguments); if (name === 'budget') W.ifxBudget.enter(); return r; }; g._bp = 1; W.switchPage = g; }
   }
   if (D.readyState === 'complete') boot(); else W.addEventListener('load', boot);

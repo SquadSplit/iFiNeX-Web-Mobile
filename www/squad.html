@@ -15,6 +15,7 @@
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Fredoka+One&display=swap" rel="stylesheet"></noscript>
 <link rel="stylesheet" href="ifinex-ui.css">
+<script defer src="ifinex-fast.js"></script>
 <script src="ifinex-config.js"></script>
 <script src="vendor/supabase.js"></script>
 <script src="vendor/ifinex-local.js"></script>
@@ -388,7 +389,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <a class="drawer-item" href="bill-tracker.html#alerts">🔔 Alerts &amp; notifications</a>
     <button id="btn-admin-panel" class="drawer-item" onclick="closeDrawer();openAdmin()" style="display:none;">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.4 · app v2.10</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.5 · app v2.11</div>
   </aside>
 
   <!-- HOME -->
@@ -1098,17 +1099,17 @@ async function addExpense(){
   if(!name||!amount||!paid_by||!date||!split_between.length){alert('⚠️ Fill all fields!');return;}
   const month=date.slice(0,7);
   const exp={name,amount,paid_by,split_between,date,category,month};
-  if(!isDemoMode&&sb){
-    const{data,error}=await sb.from('expenses').insert([sqScope(exp)]).select();
-    if(error){alert('Error saving: '+error.message);return;}
-    expenses.push(data[0]);
-  } else {
-    exp.id=Date.now();expenses.push(exp);
-  }
+  // v9.8 SPEED: shown at once, saved in the background (undone with a message if the database refuses)
+  const tmp=Object.assign({id:'tmp'+Date.now()},exp); expenses.push(tmp);
   document.getElementById('inp-name').value='';
   document.getElementById('inp-amount').value='';
   showToast('✅ Expense added!');
   refresh();showPage('home',document.querySelector('.nav-btn'));
+  if(!isDemoMode&&sb){
+    const{data,error}=await sb.from('expenses').insert([sqScope(exp)]).select();
+    if(error||!data||!data[0]){expenses=expenses.filter(x=>x!==tmp);document.getElementById('inp-name').value=name;document.getElementById('inp-amount').value=amount;refresh();alert('Not saved: '+((error&&error.message)||'try again'));return;}
+    Object.assign(tmp,data[0]);
+  }
 }
 
 // ── EXPENSE LIST ──────────────────────────────

@@ -46,12 +46,14 @@
     cfg.google = (c.google && typeof c.google === 'object') ? c.google : null; cfg.ok = true;
   }
 
+  // the 'last good copy' is kept PER SITE FOLDER: two sites on the same github.io address (e.g. your live site and a fork in a sub-folder) share one browser storage, and must never read each other's backend
+  var CACHE_KEY = 'ifx_cfg_cache:' + location.pathname.replace(/[^\/]*$/, '');
   if (mode === 'server') {
     var c = null;
     if (isNative) c = jparse(ls('ifx_server'));
     else {                                                        // website: the config that is deployed next to the pages (sync XHR on purpose: nothing may run before the backend is known)
-      try { var x = new XMLHttpRequest(); x.open('GET', 'ifinex-config.json', false); x.send(null); if (x.status === 200) { c = jparse(x.responseText); if (validCfg(c)) ls('ifx_cfg_cache', JSON.stringify(c)); } } catch (e) { }
-      if (!validCfg(c)) c = jparse(ls('ifx_cfg_cache'));         // brief network hiccup: last good copy
+      try { var x = new XMLHttpRequest(); x.open('GET', 'ifinex-config.json', false); x.send(null); if (x.status === 200) { c = jparse(x.responseText); if (validCfg(c)) ls(CACHE_KEY, JSON.stringify(c)); } } catch (e) { }
+      if (!validCfg(c)) c = jparse(ls(CACHE_KEY));         // brief network hiccup: last good copy
     }
     if (validCfg(c)) fill(c); else cfg.error = isNative ? 'no_server' : 'This website has no valid ifinex-config.json next to it (see the Self-hosting guide).';
   } else if (mode === 'standalone') {

@@ -8,6 +8,7 @@
   var mId = function (name) { var m = MEMBERS.find(function (x) { return low(x.name) === low(name) || low(x.id) === low(name); }); return m ? m.id : null; };
   var names = function () { return { 'Squad members': MEMBERS.map(function (m) { return m.name; }) }; };
   var byDate = function (a, b) { return String(a.date || a.month) < String(b.date || b.month) ? -1 : 1; };
+  var sc = function (o) { return typeof sqScope === 'function' ? sqScope(o) : o; };   // v9.3: rows are saved into the squad that is open
   var reload = async function () { await loadAllData(); refresh(); };
 
   X.register({
@@ -29,7 +30,7 @@
     },
     insert: async function (rows) {
       var payload = rows.map(function (r) { return { name: r.name, amount: r.amount, paid_by: mId(r.paid_by), split_between: (r.split && r.split.length ? r.split : MEMBERS.map(function (m) { return m.name; })).map(mId), date: r.date, category: r.category || 'other', month: r.date.slice(0, 7) }; });
-      return X.chunk(payload, 200, function (p) { return sb.from('expenses').insert(p); });
+      return X.chunk(payload, 200, function (p) { return sb.from('expenses').insert(p.map(sc)); });
     },
     after: reload
   });
@@ -46,7 +47,7 @@
       rows: async function () { return (id === 'sq_settle' ? settlements : prevBals).slice().sort(byDate).map(function (s) { return { from: mName(s.from_member), to: mName(s.to_member), amount: Number(s.amount), month: s.month }; }); },
       dupKey: function (r) { return [low(r.from), low(r.to), Number(r.amount).toFixed(2), r.month].join('|'); },
       check: function (r) { if (!mId(r.from)) return 'From "' + r.from + '" is not a squad member'; if (!mId(r.to)) return 'To "' + r.to + '" is not a squad member'; return mId(r.from) === mId(r.to) ? 'From and To must differ' : null; },
-      insert: async function (rows) { return X.chunk(rows.map(function (r) { return { from_member: mId(r.from), to_member: mId(r.to), amount: r.amount, month: r.month }; }), 200, function (p) { return sb.from(table).insert(p); }); },
+      insert: async function (rows) { return X.chunk(rows.map(function (r) { return { from_member: mId(r.from), to_member: mId(r.to), amount: r.amount, month: r.month }; }), 200, function (p) { return sb.from(table).insert(p.map(sc)); }); },
       after: reload
     });
   };

@@ -38,6 +38,8 @@
 <script defer src="ifinex-datasets.js"></script>
 <script defer src="ifinex-budget.js"></script>
 <script defer src="ifinex-et-plus.js"></script>
+<script defer src="ifinex-lifecycle.js"></script>
+<script defer src="ifinex-fast.js"></script>
 <style>
 :root {
   --bg:#0b0b18;--card:#13132a;--card2:#1a1a35;--border:#2a2a50;
@@ -388,7 +390,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="login-logo">
       <img class="logo-img" src="assets/ifinex-emblem-192.png" alt="" width="104" height="104" style="width:104px;height:104px;border-radius:50%;">
       <img src="assets/ifinex-wordmark.png" alt="iFiNeX" style="width:230px;max-width:72%;display:block;margin:6px auto 0;border-radius:12px;"><h1 style="position:absolute;left:-9999px;">iFiNeX</h1>
-      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v9.4 · app v2.10</small></p>
+      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v9.8 · app v2.12</small></p>
     </div>
 
     <div class="error-msg" id="login-error"></div>
@@ -472,7 +474,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <button class="drawer-item" id="btn-update" onclick="closeDrawer();ifxUpdate.open()">⬆️ Check for updates<span id="upd-dot"></span></button>
     <button class="drawer-item" id="btn-open-admin" style="display:none;" onclick="closeDrawer();openAdmin()">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.4 · app v2.10</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v9.8 · app v2.12</div>
   </aside>
 
   <!-- HOME -->
@@ -713,6 +715,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
 
   <div class="page" id="page-plans">
     <div class="section-title">📅 EPP &amp; Gold Payment Plans</div>
+    <div id="plan-lc"></div>
     <div class="chip-row" id="plan-type-chips"></div>
     <div class="chip-row" id="plan-event-chips"></div>
     <div class="chip-row" id="plan-ledger-chips"></div>
@@ -1543,22 +1546,38 @@ function renderDeletedHistory(){
     </div>`).join('');
 }
 
-async function loadMyData(){
-  const [c,e,o,s,p,pe,cp,cs,dir] = await Promise.all([
-    sb.from('bill_cards').select('*').ilike('user_email', escLike(managing.email)).order('created_at'),
-    sb.from('bill_expenses').select('*').ilike('user_email', escLike(managing.email)).order('date',{ascending:false}),
-    sb.from('bill_owed').select('*').ilike('user_email', escLike(managing.email)).order('created_at',{ascending:false}),
-    sb.from('bill_settlements').select('*').ilike('user_email', escLike(managing.email)).order('created_at',{ascending:false}),
-    sb.from('bill_payees').select('*').ilike('user_email', escLike(managing.email)).order('created_at'),
-    sb.from('bill_payee_entries').select('*').ilike('user_email', escLike(managing.email)).order('date',{ascending:false}),
-    sb.from('bill_card_payments').select('*').ilike('user_email', escLike(managing.email)),
-    sb.from('bill_card_shares').select('*').ilike('owner_email', escLike(managing.email)),
-    sb.from('app_users_directory').select('*').order('name'),
-  ]);
-  myCards = c.data||[]; myExpenses = e.data||[]; myOwed = o.data||[]; mySettlements = s.data||[];
-  myPayees = p.data||[]; myPayeeEntries = pe.data||[]; myCardPayments = cp.data||[];
-  myCardShares = cs.data||[]; appUsersDirectory = dir.data||[];
-  try{ await loadSharedWithMe(); await loadPlans(); }catch(e){ console.warn('plans',e); }
+// v9.8 SPEED: ONE parallel round (the old code ran 3 rounds one after another), only the tables that changed (`only`), the people
+// directory is fetched once, and overlapping calls are merged into a single reload.
+let _ldP=null, _ldWant=null, _dirOk=false;
+function loadMyData(only){
+  if(_ldP){ _ldWant = (_ldWant===undefined||only===undefined||!only||!_ldWant) ? undefined : [...new Set([..._ldWant,...only])]; return _ldP; }
+  _ldWant = only||undefined;
+  _ldP=(async()=>{
+    try{
+      let guard=0, w;
+      do{ w=_ldWant; _ldWant=null; await _loadMyDataOnce(w); }while(_ldWant!==null && ++guard<3);
+    } finally { _ldP=null; _ldWant=null; }
+  })();
+  return _ldP;
+}
+async function _loadMyDataOnce(only){
+  const want=k=>!only||only.includes(k), em=escLike(managing.email), q=(t,o,asc)=>sb.from(t).select('*').ilike('user_email',em).order(o,{ascending:!!asc});
+  const job={};
+  if(want('cards')) job.c=q('bill_cards','created_at',true);
+  if(want('expenses')) job.e=q('bill_expenses','date');
+  if(want('owed')) job.o=q('bill_owed','created_at');
+  if(want('settlements')) job.s=q('bill_settlements','created_at');
+  if(want('payees')) job.p=q('bill_payees','created_at',true);
+  if(want('entries')) job.pe=q('bill_payee_entries','date');
+  if(want('cardpay')) job.cp=sb.from('bill_card_payments').select('*').ilike('user_email',em);
+  if(want('shares')) job.cs=sb.from('bill_card_shares').select('*').ilike('owner_email',em);
+  if(want('dir') && (!_dirOk || (only&&only.includes('dir')))) job.dir=sb.from('app_users_directory').select('*').order('name');
+  if(want('shared')) job.sh=loadSharedWithMe().catch(e=>console.warn('shared',e));
+  if(want('plans')) job.pl=loadPlans().catch(e=>console.warn('plans',e));
+  const keys=Object.keys(job), res=await Promise.all(keys.map(k=>job[k])), r={}; keys.forEach((k,i)=>r[k]=res[i]);
+  if(r.c) myCards=r.c.data||[]; if(r.e) myExpenses=r.e.data||[]; if(r.o) myOwed=r.o.data||[]; if(r.s) mySettlements=r.s.data||[];
+  if(r.p) myPayees=r.p.data||[]; if(r.pe) myPayeeEntries=r.pe.data||[]; if(r.cp) myCardPayments=r.cp.data||[];
+  if(r.cs) myCardShares=r.cs.data||[]; if(r.dir){ appUsersDirectory=r.dir.data||[]; _dirOk=true; }
   fillCardSelect();
   fillPayeeEmailDatalist();
   renderCards();
@@ -1896,7 +1915,7 @@ async function confirmDeleteWithReason(){
   closeDeleteModal();
   if(error || !data?.ok){ toast('Could not delete — ' + (data?.error || 'try again')); return; }
   toast('Deleted ✓ — the other side has been notified, and it\'s in Deleted History');
-  await loadMyData();
+  await loadMyData(['owed','settlements','entries','payees']);
   await loadOwedToMe();
   await loadDeletedHistory();
 }
@@ -2236,12 +2255,14 @@ async function addExpense(){
   const cardId=document.getElementById('add-card').value;
   const category=document.getElementById('add-category').value;
   if(!desc||!amount||amount<=0||!date){ toast('Fill in description, amount and date'); return; }
-  const month=date.slice(0,7);
-  const { error } = await sb.from('bill_expenses').insert({ user_email:managing.email, description:desc, amount, card_id:cardId||null, category, date, month });
-  if(error){ toast('Could not save — try again'); return; }
+  const month=date.slice(0,7), row={ user_email:managing.email, description:desc, amount, card_id:cardId||null, category, date, month };
+  // v9.8 SPEED: show it at once (optimistic), save in the background, undo with a message only if the database refuses
+  const tmp=Object.assign({id:'tmp'+Date.now(),created_at:new Date().toISOString()},row); myExpenses.unshift(tmp);
   document.getElementById('add-desc').value=''; document.getElementById('add-amount').value='';
-  toast('Spend saved ✓');
-  await loadMyData();
+  toast('Spend saved ✓'); renderHome(); renderCards();
+  const { data, error } = await sb.from('bill_expenses').insert(row).select().single();
+  if(error||!data){ myExpenses=myExpenses.filter(x=>x!==tmp); document.getElementById('add-desc').value=desc; document.getElementById('add-amount').value=amount; renderHome(); renderCards(); toast('❌ Not saved — '+((error&&error.message)||'try again')); return; }
+  Object.assign(tmp,data);
   // Stays on the Add page — jumping back to Home after every single entry
   // was the reported annoyance, especially when logging several in a row.
 }
@@ -2252,10 +2273,9 @@ async function addExpense(){
 // deleteCard()/deleteParty() below, for consistency.
 async function deleteExpense(id){
   if(!confirm('Delete this spend entry? This can\'t be undone.')) return;
+  const keep=myExpenses; myExpenses=myExpenses.filter(e=>e.id!==id); renderHome(); renderCards(); toast('Entry deleted');   // v9.8: instant
   const { error } = await sb.from('bill_expenses').delete().eq('id', id);
-  if(error){ toast('Could not delete — try again'); return; }
-  toast('Entry deleted');
-  await loadMyData();
+  if(error){ myExpenses=keep; renderHome(); renderCards(); toast('Could not delete — try again'); }
 }
 function editExpense(id){
   const x = myExpenses.find(e=>e.id===id);
@@ -2283,7 +2303,7 @@ async function saveEditExpense(){
   if(error){ toast('Could not save — try again'); return; }
   closeEditExpense();
   toast('Spend updated ✓');
-  await loadMyData();
+  await loadMyData(['expenses']);
 }
 
 // ── CARDS ─────────────────────────────────────
@@ -2433,7 +2453,7 @@ async function addCard(){
   if(error){ toast('Could not add card'); return; }
   document.getElementById('new-card-name').value=''; document.getElementById('new-card-due').value='';
   toast('Card added ✓');
-  await loadMyData();
+  await loadMyData(['cards','cardpay']);
 }
 async function editCardDueDay(cardId,current){
   const val=prompt('Due day of month (1–31). Leave blank to turn off notifications for this card.', current||'');
@@ -2442,7 +2462,7 @@ async function editCardDueDay(cardId,current){
   const { error } = await sb.from('bill_cards').update({ due_day, reminder_enabled: !!due_day }).eq('id',cardId);
   if(error){ toast('Could not update'); return; }
   toast(due_day?'Due day set ✓':'Notifications turned off for this card');
-  await loadMyData();
+  await loadMyData(['cards','cardpay']);
 }
 async function toggleCardPaid(cardId,month,makePaid){
   const cyc = cardCycleInfo(myCards.find(c=>c.id===cardId));
@@ -2450,12 +2470,12 @@ async function toggleCardPaid(cardId,month,makePaid){
   const { error } = await sb.from('bill_card_payments').upsert(payload,{ onConflict:'card_id,month' });
   if(error){ toast('Could not update'); return; }
   toast(makePaid?'Marked as paid ✓':'Marked as unpaid');
-  await loadMyData();
+  await loadMyData(['cards','cardpay']);
 }
 async function deleteCard(id){
   if(!confirm('Remove this card? Past spends stay, just unlinked.')) return;
   await sb.from('bill_cards').delete().eq('id',id);
-  await loadMyData();
+  await loadMyData(['cards','cardpay','expenses','plans']);
 }
 let _sharingCardId = null;
 function openManageShares(cardId){
@@ -2493,13 +2513,13 @@ async function addCardShare(){
   if(error){ toast(error.code==='23505' ? 'Already shared with them' : 'Could not add — try again'); return; }
   document.getElementById('new-share-manual').value='';
   toast(`Shared with ${known?known.name:email} ✓`);
-  await loadMyData();
+  await loadMyData(['shares','shared']);
   renderShareList();
 }
 async function removeCardShare(shareId){
   await sb.from('bill_card_shares').delete().eq('id', shareId);
   toast('Access removed');
-  await loadMyData();
+  await loadMyData(['shares','shared']);
   renderShareList();
 }
 function deleteOwedEntry(id){
@@ -2514,7 +2534,7 @@ async function recordSettlement(){
   if(error){ toast('Could not save'); return; }
   document.getElementById('settle-amount').value='';
   toast('Payment recorded ✓ — admin has been notified');
-  await loadMyData();
+  await loadMyData(['settlements','owed']);
 }
 // v7.2 — admin (or an admin-delegate) assigning an owed amount to whoever is
 // currently being managed, inline from this tab instead of the separate
@@ -2531,7 +2551,7 @@ async function addOwedInline(){
   document.getElementById('inline-owed-amount').value='';
   document.getElementById('inline-owed-note').value='';
   toast('Owed entry added ✓ — they\'ve been notified');
-  await loadMyData();
+  await loadMyData(['owed']);
 }
 // v7.2 — delete-with-reason for a "paid to admin" settlement row, same
 // pattern as deleteOwedEntry/deletePayeeEntry. Owner, their delegate, or
@@ -2626,7 +2646,7 @@ async function saveEditOwed(){
   if(error){ toast('Could not save — '+(error.message||'try again')); return; }
   closeEditOwed();
   toast('Owed entry updated ✓ — they\'ve been notified');
-  await loadMyData();
+  await loadMyData(['owed']);
 }
 
 // ── ADD PAGE SUB-TABS ─────────────────────────
@@ -2674,7 +2694,7 @@ async function addParty(){
   if(error){ toast('Could not add party'); return; }
   document.getElementById('new-party-name').value=''; document.getElementById('new-party-email').value='';
   toast('Party added ✓');
-  await loadMyData();
+  await loadMyData(['payees','entries']);
 }
 async function deleteParty(id){
   // v8.1 FIX: this used to delete the party AND its whole ledger (FK cascade) while saying "past entries stay".
@@ -2685,7 +2705,7 @@ async function deleteParty(id){
   const { data, error } = await sb.rpc('delete_payee_with_reason', { p_payee_id: id, p_reason: reason });
   if(error || !data || data.ok !== true){ toast('Could not remove: ' + (error ? error.message : ((data && data.error) || 'unknown'))); return; }
   toast('🗑️ Removed — ' + (data.archived||0) + ' entr' + ((data.archived||0)===1?'y':'ies') + ' saved to Deleted history');
-  await loadMyData();
+  await loadMyData(['payees','entries']);
 }
 function fillPayeeSelect(){
   const sel=document.getElementById('pe-payee');
@@ -2750,7 +2770,7 @@ async function addPayeeEntry(){
   if(error){ toast('Could not save entry'); return; }
   document.getElementById('pe-new-payee').value=''; document.getElementById('pe-amount').value=''; document.getElementById('pe-note').value='';
   toast('Saved ✓');
-  await loadMyData();
+  await loadMyData(['entries','payees']);
   await loadOwedToMe();
   // Stays on the Add page, same reasoning as addExpense above.
 }
@@ -2860,7 +2880,7 @@ async function saveEditPayeeEntry(){
   if(error){ toast('Could not save — try again'); return; }
   closeEditPayeeEntry();
   toast('Updated ✓ — the other side has been notified');
-  await loadMyData();
+  await loadMyData(['entries','payees']);
   await loadOwedToMe();
 }
 // One-tap settlement — inserts a 'paid' entry for the full outstanding
@@ -2894,7 +2914,7 @@ async function confirmSettleAmount(){
   closeSettleAmountModal();
   if(error){ toast('Could not settle — try again'); return; }
   toast(isPartial ? `Partial settlement of ${amount.toFixed(2)} AED recorded ✓ — remainder stays owed` : 'Settled ✓');
-  await loadMyData();
+  await loadMyData(['entries','payees']);
   await loadOwedToMe();
 }
 // v7.3: full, uncapped breakdown for one party — Owed to Others and Owed to
@@ -3045,7 +3065,7 @@ async function submitQuickEntry(){
   // v7.2: this modal now serves both directions (Owed to Others AND Owed to
   // You), so refresh both — loadMyData covers myPayeeEntries, loadOwedToMe
   // covers the reverse view; whichever didn't change is a harmless no-op.
-  await loadMyData();
+  await loadMyData(['owed','entries','payees','settlements']);
   await loadOwedToMe();
 }
 
@@ -3199,12 +3219,13 @@ function renderPlans(){
   chips('plan-type-chips','type',[['all','All types'],['epp','EPP'],['gold','Gold']]);
   chips('plan-event-chips','event',[['all','All events'],...evs.map(e=>[e,e])]);
   chips('plan-ledger-chips','ledger',[['all','All ledgers'],...Object.entries(LEDGER_LBL)]);
-  const list=myPlans.filter(p=>(planF.type==='all'||p.plan_type===planF.type)&&(planF.event==='all'||p.event_name===planF.event)&&(planF.ledger==='all'||p.ledger===planF.ledger));
+  if(window.ifxLC) ifxLC.planBar();   // v9.8: Active / Completed / All + month / custom dates
+  const list=myPlans.filter(p=>(planF.type==='all'||p.plan_type===planF.type)&&(planF.event==='all'||p.event_name===planF.event)&&(planF.ledger==='all'||p.ledger===planF.ledger)&&(!window.ifxLC||ifxLC.planPass(p)));
   let T=0,P=0,R=0,L=0; list.forEach(p=>{const s=planStats(p);T+=s.total;P+=s.paidAmt;R+=s.remain;L+=s.left;});
   document.getElementById('plan-summary').innerHTML=[['Total',T.toFixed(2)],['Paid',P.toFixed(2)],['Remaining',R.toFixed(2)]].map(([k,v])=>`<div class="plan-stat">${esc(k)}<b>${esc(v)}</b></div>`).join('')+`<div class="plan-stat" style="grid-column:span 3;">${esc(list.length)} plan(s) · ${esc(L)} payment(s) / month(s) left</div>`;
   const cardName=id=>{const c=[...myCards,...sharedCardsForPlans].find(c=>c.id===id);return c?c.card_name+(c.user_email&&c.user_email.toLowerCase()!==managing.email.toLowerCase()?' ('+c.user_email.split('@')[0]+"'s card)":''):'—';};
   const today=localDateStr(new Date());
-  document.getElementById('plan-list').innerHTML=list.length?list.map(planCardHtml).join(''):'<p style="color:var(--muted);text-align:center;">No plans yet. Tap “New plan”.</p>';
+  document.getElementById('plan-list').innerHTML=list.length?list.map(planCardHtml).join(''):'<p style="color:var(--muted);text-align:center;">'+(myPlans.length?'No plans match these filters — check the Completed tab or reset the filters.':'No plans yet. Tap “New plan”.')+'</p>';
 }
 let planEditId=null;
 async function openPlanModal(editId){
@@ -3347,13 +3368,13 @@ async function linkParty(pid){
   if(!known&&!confirm(em+' is not registered yet. Link anyway?')) return;
   const upd={party_email:em.toLowerCase()}; if(known&&(p.party_name.includes('@')||p.party_name.toLowerCase()===em.toLowerCase())) upd.party_name=known.name;
   const {error}=await sb.from('bill_payees').update(upd).eq('id',pid); if(error) return toast('❌ '+error.message);
-  toast('Linked ✓'); await loadMyData(); openPartyDetail(pid);
+  toast('Linked ✓'); await loadMyData(['payees','shares']); openPartyDetail(pid);
 }
 async function togglePartyCard(pid,cardId,on){
   const p=myPayees.find(x=>x.id===pid), em=p.party_email.toLowerCase();
   const {error}=on?await sb.from('bill_card_shares').insert({card_id:cardId,owner_email:managing.email,shared_with_email:em}):await sb.from('bill_card_shares').delete().eq('card_id',cardId).ilike('shared_with_email',escLike(em));
   if(error&&error.code!=='23505') toast('❌ '+error.message); else toast(on?'Access granted ✓':'Access removed');
-  await loadMyData(); openPartyDetail(pid);
+  await loadMyData(['payees','shares']); openPartyDetail(pid);
 }
 // ── plans accordion ──
 let planOpen={}, planTab={};
@@ -3399,11 +3420,11 @@ const ETK_ICON={period:'📆',occasion:'🎟️',trip:'✈️'}, ETK_NAME={perio
 const ET_DEF=[['Breakfast','🍳'],['Lunch','🍱'],['Dinner','🍽️'],['Diet items','🥗'],['Necessaries','🧴'],['Groceries','🛒'],['Lifestyle','✨'],['Fashion & Grooming','💇'],['Medical','💊'],['Outing','🎡'],['Travel','✈️'],['Stay','🏨'],['Shopping','🛍️'],['Gifts','🎁'],['Other','📦']];
 let etTrackers=[],etEntries=[],etCats=[],etTab='period',etOpen=null,etF={cat:'all',from:'',to:''};
 async function loadEt(){
-  const [t,c]=await Promise.all([sb.from('et_trackers').select('*').order('start_date',{ascending:false}),sb.from('et_categories').select('*').ilike('user_email',escLike(managing.email))]);
+  // v9.8 SPEED: trackers, categories and entries in ONE parallel round (was two rounds); entries are narrowed to my trackers afterwards
+  const [t,c,e]=await Promise.all([sb.from('et_trackers').select('*').order('start_date',{ascending:false}),sb.from('et_categories').select('*').ilike('user_email',escLike(managing.email)),sb.from('et_entries').select('*').order('entry_date',{ascending:false})]);
   const mm=managing.email.toLowerCase();
   etTrackers=(t.data||[]).filter(x=>x.user_email.toLowerCase()===mm||(x.participants||[]).includes(mm)); etCats=c.data||[];
-  const ids=etTrackers.map(x=>x.id); etEntries=[];
-  if(ids.length){const e=await sb.from('et_entries').select('*').in('tracker_id',ids).order('entry_date',{ascending:false}); etEntries=e.data||[];}
+  const ids=new Set(etTrackers.map(x=>x.id)); etEntries=(e.data||[]).filter(x=>ids.has(x.tracker_id));
 }
 const etAllCats=()=>[...ET_DEF,...etCats.filter(c=>!ET_DEF.some(d=>d[0]===c.name)).map(c=>[c.name,c.icon])];
 const etIcon=n=>(etAllCats().find(c=>c[0]===n)||[0,'🏷️'])[1];
@@ -3459,15 +3480,18 @@ async function addEtEntry(){
   const t=etTrackers.find(x=>x.id===etOpen), amt=parseFloat(document.getElementById('ete-amt').value), d=document.getElementById('ete-date').value;
   if(!(amt>0)) return toast('Enter an amount'); if(!d||d<t.start_date||d>t.end_date) return toast('Date must be within '+t.start_date+' → '+t.end_date);
   const by=document.getElementById('ete-by');
-  const {error}=await sb.from('et_entries').insert({tracker_id:t.id,user_email:t.user_email,category:document.getElementById('ete-cat').value,amount:amt,entry_date:d,note:document.getElementById('ete-note').value.trim(),spent_by:by?by.value:t.user_email,created_by_email:me.email});
-  if(error) return toast('❌ '+error.message); await loadEt(); renderEt(); toast('Added ✓');
+  const row={tracker_id:t.id,user_email:t.user_email,category:document.getElementById('ete-cat').value,amount:amt,entry_date:d,note:document.getElementById('ete-note').value.trim(),spent_by:by?by.value:t.user_email,created_by_email:me.email};
+  const tmp=Object.assign({id:'tmp'+Date.now()},row); etEntries.unshift(tmp); toast('Added ✓'); renderEt();   // v9.8 SPEED: instant, saved in the background
+  const {data,error}=await sb.from('et_entries').insert(row).select().single();
+  if(error||!data){ etEntries=etEntries.filter(x=>x!==tmp); renderEt(); return toast('❌ Not saved — '+((error&&error.message)||'try again')); }
+  Object.assign(tmp,data);
 }
 async function addEtCat(){
   const n=document.getElementById('etc-name').value.trim(); if(!n) return toast('Enter a category name');
   const {error}=await sb.from('et_categories').insert({user_email:managing.email,name:n,icon:document.getElementById('etc-icon').value.trim()||'🏷️'});
   if(error) return toast(error.code==='23505'?'Already exists':'❌ '+error.message); await loadEt(); renderEt();
 }
-async function delEtEntry(id){ if(!confirm('Delete this entry?')) return; const {error}=await sb.from('et_entries').delete().eq('id',id); if(error) return toast('❌ '+error.message); await loadEt(); renderEt(); }
+async function delEtEntry(id){ if(!confirm('Delete this entry?')) return; const keep=etEntries; etEntries=etEntries.filter(e=>e.id!==id); renderEt(); const {error}=await sb.from('et_entries').delete().eq('id',id); if(error){ etEntries=keep; renderEt(); toast('❌ '+error.message); } }
 async function deleteEt(id){ if(!confirm('Delete this tracker and ALL its entries?')) return; const {error}=await sb.from('et_trackers').delete().eq('id',id); if(error) return toast('❌ '+error.message); etOpen=null; await loadEt(); renderEt(); }
 // ── export (PDF / Excel) ──
 function loadScript(u){return new Promise((ok,no)=>{if(document.querySelector('script[src="'+u+'"]'))return ok();const x=document.createElement('script');x.src=u;x.onload=ok;x.onerror=()=>no(new Error('Could not load '+u+' (check internet)'));document.head.appendChild(x);});}

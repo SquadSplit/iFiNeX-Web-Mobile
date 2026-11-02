@@ -6,7 +6,7 @@
    The JS never chooses a repo or a URL — that is fixed inside the app (see IfinexUpdatePlugin.java). Release notes are shown as plain text only. */
 (function (W, D) {
   'use strict';
-  var WEB_VER = '9.4';
+  var WEB_VER = '9.8';
   var LAST_KEY = 'ifx_upd_last', BANNER_KEY = 'ifx_upd_banner';
   var CHECK_EVERY_MS = 3 * 3600 * 1000;     // background check cadence
 
@@ -108,22 +108,9 @@
       area.appendChild(btn('Close', false, close)); setDot(false); return;
     }
     setDot(true);
-    status.textContent = 'Update available: v' + r.version + (r.build ? ' (built ' + bdate(r.build) + ')' : '') + ' — you have v' + r.installedVersion + (r.installedBuild ? ' (built ' + bdate(r.installedBuild) + ')' : '') + (r.assetSize ? ' · ' + mb(r.assetSize) : '') + '. Nothing is downloaded until you tap Download.';
+    status.textContent = 'Update available: v' + r.version + (r.build ? ' (built ' + bdate(r.build) + ')' : '') + ' — you have v' + r.installedVersion + (r.installedBuild ? ' (built ' + bdate(r.installedBuild) + ')' : '') + (r.assetSize ? ' · ' + mb(r.assetSize) : '') + '. Nothing is downloaded until you tap the button.';
     if (r.notes) { var pre = el('pre', 'white-space:pre-wrap;font:inherit;font-size:.76rem;color:var(--muted,#9aa3c7);background:var(--card2,rgba(255,255,255,.05));border-radius:10px;padding:9px;max-height:150px;overflow:auto;margin:6px 0;'); pre.textContent = r.notes.slice(0, 900); area.appendChild(pre); }
-    var bar = el('div', 'height:8px;border-radius:6px;background:var(--card2,rgba(255,255,255,.1));overflow:hidden;margin-top:10px;display:none;'), fill = el('div', 'height:100%;width:0;background:var(--accent,#4d96ff);transition:width .2s;'); bar.appendChild(fill); area.appendChild(bar);
-    var go = btn('Download update', true, async function () {
-      if (busy) return; busy = true; go.disabled = true; go.textContent = 'Downloading…'; bar.style.display = 'block';
-      var h; try { h = await p.addListener('progress', function (e) { if (e && e.total > 0) fill.style.width = Math.min(100, Math.round(100 * e.done / e.total)) + '%'; }); } catch (e) { }
-      try {
-        await p.download(); fill.style.width = '100%';
-        status.textContent = '✅ Downloaded and verified (same app, same signing key, newer build). Tap "Install now", then confirm on the Android screen.';
-        go.textContent = 'Install now'; go.disabled = false; busy = false;
-        go.onclick = null; go.replaceWith(inst);
-      } catch (e) { status.textContent = '❌ ' + friendly(e); status.style.color = '#FF6B6B'; go.textContent = 'Try again'; go.disabled = false; busy = false; }
-      try { if (h && h.remove) h.remove(); } catch (e) { }
-    });
-    var inst = btn('Install now', true, async function () {
-      // offline edition: the data lives only in the phone — offer a backup first (updates keep it, a backup is insurance)
+    var go = btn('Download update (opens browser)', true, async function () {
       try {
         if (W.ifxBackup && W.ifxBackup.exportNow) {
           var last = +new Date(ls('ifx_sa_lastbackup') || 0);
@@ -131,11 +118,11 @@
         }
       } catch (e) { }
       try {
-        var res = await p.install();
-        if (res && res.needsPermission) { status.textContent = 'Android needs your permission: in the screen that just opened switch ON "Allow from this source", then come back and tap Install now again.'; }
-        else status.textContent = 'Android install screen opened — tap Install there. The app restarts when it finishes.';
+        await p.install();
+        status.textContent = 'Your browser opened the download. When it finishes, open the downloaded .apk (notification or Downloads) and tap Install. Your data stays — it installs over the old app.';
       } catch (e) { status.textContent = '❌ ' + friendly(e); status.style.color = '#FF6B6B'; }
     });
+    if (r.sha256) { var sh = el('div', 'font-size:.66rem;color:var(--muted,#9aa3c7);margin:6px 0;word-break:break-all;', 'File checksum (SHA-256): ' + r.sha256); area.appendChild(sh); }
     area.appendChild(go); area.appendChild(btn('Later', false, close));
   }
 
