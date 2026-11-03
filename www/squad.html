@@ -26,6 +26,7 @@
 <script defer src="vendor/xlsx.full.min.js"></script>
 <script defer src="ifinex-theme.js"></script>
 <script defer src="ifinex-tools.js"></script>
+<script defer src="ifinex-reports.js"></script>
 <script defer src="ifinex-edit-plus.js"></script>
 <script defer src="ifinex-standalone.js"></script>
 <script defer src="ifinex-connection.js"></script>
@@ -456,7 +457,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     </div>
     <div id="settle-list"></div>
 
-    <button class="btn-add" id="btn-email-squad-report" style="background:linear-gradient(135deg,#4d96ff,#b06aff);margin:6px 0 8px;" onclick="emailSquadReport()">📧 Email Me This Month's Report</button>
+    <button class="btn-add" id="btn-email-squad-report" style="background:linear-gradient(135deg,#4d96ff,#b06aff);margin:6px 0 8px;" onclick="ifxReports.open('squad')">📊 Reports &amp; downloads (PDF · Excel · CSV)</button>
 
     <div class="section-title" style="margin-top:8px;">💳 Record a Payment</div>
     <div class="info-box">When someone actually pays — record it here to update balances</div>

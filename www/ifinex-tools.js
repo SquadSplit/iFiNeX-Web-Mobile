@@ -37,15 +37,48 @@
     if (!(W.jspdf && W.jspdf.jsPDF.API.autoTable)) await loadScript('vendor/jspdf.plugin.autotable.min.js');
     if (!W.jspdf) throw new Error('PDF library missing');
   }
+  /* v9.9 SAVE: one safe way to hand a file to the user, on every platform. Order:
+       1) Android/iOS app  -> write to the app cache with the Filesystem plugin and open the Share sheet (Save to Files / Drive / WhatsApp / Email ...)
+       2) phone browser    -> Web Share API with the file
+       3) computer browser -> normal download (<a download>)
+       4) anything else    -> a visible "Tap to download" box (never a silent failure)
+     The old code used jsPDF doc.save() / XLSX.writeFile(), which Android's WebView silently ignores - that was the "cannot download PDF / Excel" bug. */
+  function b64Of(blob) { return new Promise(function (ok, no) { var f = new FileReader(); f.onload = function () { ok(String(f.result).split(',')[1]); }; f.onerror = function () { no(f.error || new Error('read failed')); }; f.readAsDataURL(blob); }); }
+  function fallbackBox(blob, name) {
+    var url = URL.createObjectURL(blob), box = D.createElement('div');
+    box.style.cssText = 'position:fixed;left:12px;right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:99999;background:var(--card,#151528);color:var(--text,#e8ecff);border:1px solid var(--accent,#4d96ff);border-radius:14px;padding:12px;box-shadow:0 8px 28px rgba(0,0,0,.5);font-size:.82rem;';
+    box.innerHTML = '<div style="margin-bottom:8px;">Your device did not start the download by itself. Tap the button, then choose <b>Download</b> / <b>Save</b>:</div>';
+    var a = D.createElement('a'); a.href = url; a.download = name; a.target = '_blank'; a.rel = 'noopener'; a.textContent = '\u2B07 ' + name;
+    a.style.cssText = 'display:block;text-align:center;padding:11px;border-radius:10px;background:var(--accent,#4d96ff);color:#fff;font-weight:800;text-decoration:none;word-break:break-all;';
+    var x = D.createElement('button'); x.textContent = 'Close'; x.style.cssText = 'margin-top:8px;width:100%;padding:8px;border-radius:10px;border:1px solid var(--border,rgba(255,255,255,.2));background:none;color:inherit;cursor:pointer;';
+    x.onclick = function () { box.remove(); setTimeout(function () { URL.revokeObjectURL(url); }, 500); };
+    box.appendChild(a); box.appendChild(x); D.body.appendChild(box);
+  }
   async function saveBlob(blob, name) {
-    var C = W.Capacitor;
-    if (C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.Filesystem && C.Plugins.Share) {
-      var b64 = await new Promise(function (r) { var f = new FileReader(); f.onload = function () { r(String(f.result).split(',')[1]); }; f.readAsDataURL(blob); });
-      var w = await C.Plugins.Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
-      await C.Plugins.Share.share({ title: name, url: w.uri }); return;
+    var C = W.Capacitor, native = false, lastErr = null;
+    try { native = !!(C && C.isNativePlatform && C.isNativePlatform()); } catch (e) { }
+    if (native) {
+      try {
+        var P = C.Plugins || {};
+        if (P.Filesystem && P.Share) {
+          var w = await P.Filesystem.writeFile({ path: 'ifinex-files/' + name, data: await b64Of(blob), directory: 'CACHE', recursive: true });
+          await P.Share.share({ title: name, text: name, url: w.uri, dialogTitle: 'Save or share ' + name });
+          return 'shared';
+        }
+      } catch (e) { if (/cancel|dismiss|abort/i.test(String(e && (e.message || e)))) return 'cancelled'; lastErr = e; console.warn('native save failed', e); }
     }
-    var a = D.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; D.body.appendChild(a); a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+    try {   // phone browsers (Chrome Android, Safari iOS)
+      if (!native && navigator.canShare && navigator.share && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+        var f = new File([blob], name, { type: blob.type || 'application/octet-stream' });
+        if (navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return 'shared'; }
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return 'cancelled'; lastErr = e; }
+    if (native) { fallbackBox(blob, name); if (lastErr) toast('Could not open the share sheet - use the button shown (' + (lastErr.message || lastErr) + ')'); return 'fallback'; }
+    try {
+      var a = D.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.style.display = 'none'; D.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+      return 'downloaded';
+    } catch (e) { fallbackBox(blob, name); return 'fallback'; }
   }
   function safeName(s) { return String(s || 'ifinex').replace(/[^\w\-]+/g, '_').replace(/^_+|_+$/g, '') || 'ifinex'; }
   function stamp() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
