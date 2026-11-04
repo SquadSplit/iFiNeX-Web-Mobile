@@ -45,7 +45,7 @@
   var R = null, MODEL = null, busy = false;
   function fresh(mod) {
     var ym = today().slice(0, 7);
-    return { mod: mod, preset: 'this_month', month: ym, from: ym + '-01', to: today(), scope: 'me', picked: {}, group: 'user', sec: { a: true, b: true, c: true, d: true, e: true }, squads: {}, users: [], people: [] };
+    return { mod: mod, preset: 'this_month', month: ym, from: ym + '-01', to: today(), scope: 'me', picked: {}, group: 'user', sec: { a: true, b: true, c: true, d: true, e: true }, xs: { sq_a: true, sq_b: true, sq_c: true, sq_d: true, et_a: true, et_b: true, et_c: true, bp_a: true, bp_b: true, bp_c: true, pl_a: true, pl_b: true }, mods: { bill: true }, events: {}, trackers: [], all: false, squads: {}, users: [], people: [] };
   }
 
   /* ---------- people lists ---------- */
@@ -70,11 +70,11 @@
   }
 
   /* ============================== BILL TRACKER DATA ============================== */
-  async function billModel(o) {
-    var s = SB(); if (!s) throw new Error('Reports need the live database (demo mode has no database).');
-    var P = periodOf(R), inR = function (d) { return !!d && d >= P.from && d <= P.to; }, inM = function (m) { return !!m && m >= P.from.slice(0, 7) && m <= P.to.slice(0, 7); };
-    var users = R.scope === 'all' ? R.users.slice() : R.scope === 'pick' ? R.users.filter(function (u) { return R.picked[String(u.email).toLowerCase()]; }) : R.users.filter(function (u) { return String(u.email).toLowerCase() === R.cur; });
-    if (!users.length) users = [{ email: R.cur, name: R.cur }];
+  async function billPart(users, P, s) {
+
+    var inR = function (d) { return !!d && d >= P.from && d <= P.to; }, inM = function (m) { return !!m && m >= P.from.slice(0, 7) && m <= P.to.slice(0, 7); };
+
+
     var lowerUsers = users.map(function (u) { return { email: u.email, name: u.name || u.email }; });
     var per = await Promise.all(lowerUsers.map(async function (u) {
       var em = like(u.email), q = function (t) { return s.from(t).select('*').ilike('user_email', em); };
@@ -99,13 +99,13 @@
     var many = per.length > 1, T = [], sheetOf = function (n) { return n; };
     var sum = per.map(function (u) { return [u.name, u.spent, u.owedNow, u.pay.reduce(function (a, x) { return a + x.amount; }, 0), u.youOwe.reduce(function (a, x) { return a + x.b; }, 0), u.owedToYou.reduce(function (a, x) { return a + x.b; }, 0)]; });
     var tot = ['TOTAL'], i; for (i = 1; i < 6; i++) tot.push(sum.reduce(function (a, r) { return a + r[i]; }, 0));
-    T.push({ sheet: 'Summary', title: 'Summary — spending and balances', head: ['User', 'Spent in period', 'Owed to admin (now)', 'Paid to admin (period)', 'You owe parties (now)', 'Owed to you (now)'], rows: sum, total: many ? tot : null, num: [1, 2, 3, 4, 5] });
+    T.push({ sheet: R.all ? 'Bill summary' : 'Summary', title: 'Summary — spending and balances', head: ['User', 'Spent in period', 'Owed to admin (now)', 'Paid to admin (period)', 'You owe parties (now)', 'Owed to you (now)'], rows: sum, total: many ? tot : null, num: [1, 2, 3, 4, 5] });
     // monthly
     if (R.group === 'month') {
       var months = {}; per.forEach(function (u, ui) { u.exp.forEach(function (x) { var m = x.date.slice(0, 7); (months[m] = months[m] || per.map(function () { return 0; }))[ui] += x.amount; }); });
       var ml = Object.keys(months).sort(), mr = ml.map(function (m) { var v = months[m]; return [monthLabel(m)].concat(v, many ? [v.reduce(function (a, b) { return a + b; }, 0)] : []); });
       var mt = ['TOTAL']; for (i = 0; i < per.length + (many ? 1 : 0); i++) mt.push(mr.reduce(function (a, r) { return a + r[i + 1]; }, 0));
-      T.push({ sheet: 'Monthly', title: 'Spending per month', head: ['Month'].concat(per.map(function (u) { return u.name; }), many ? ['All'] : []), rows: mr, total: mr.length ? mt : null, num: per.map(function (u, k) { return k + 1; }).concat(many ? [per.length + 1] : []) });
+      T.push({ sheet: R.all ? 'Bill monthly' : 'Monthly', title: 'Spending per month', head: ['Month'].concat(per.map(function (u) { return u.name; }), many ? ['All'] : []), rows: mr, total: mr.length ? mt : null, num: per.map(function (u, k) { return k + 1; }).concat(many ? [per.length + 1] : []) });
     }
     var spec = [
       { key: 'a', t: 'Spending', f: 'exp', head: ['Date', 'What', 'Category', 'Card', 'Amount'], row: function (x) { return [x.date, x.what, x.cat, x.card, x.amount]; }, am: 4 },
@@ -128,30 +128,15 @@
       var br = []; per.forEach(function (u) { u.youOwe.forEach(function (x) { br.push([u.name, 'You owe', x.who, x.b]); }); u.owedToYou.forEach(function (x) { br.push([u.name, 'Owed to you', x.who, x.b]); }); if (u.owedNow > 0) br.push([u.name, 'Owed to admin', 'Admin', u.owedNow]); });
       T.push({ sheet: 'Balances now', title: 'Balances as of today (running totals, not period activity)', head: ['User', 'Direction', 'With', 'Amount'], rows: br, total: null, num: [3] });
     }
-    return { title: 'Bill Tracker report', subtitle: P.label + ' · ' + (many ? per.length + ' users' : per[0].name) + ' · amounts in AED', tables: T, file: 'bill-report_' + (P.from === '1970-01-01' ? 'all' : P.from + '_to_' + P.to) };
+    return { T: T, per: per };
   }
   function totalOf(rows, ai, len) { var t = []; for (var i = 0; i < len; i++) t.push(''); t[0] = 'TOTAL'; t[ai] = rows.reduce(function (a, r) { return a + (Number(r[ai]) || 0); }, 0); return t; }
 
   /* ============================== SQUAD SPLIT DATA ============================== */
-  async function squadModel() {
-    var s = SB(), P = periodOf(R), inR = function (d) { return !!d && d >= P.from && d <= P.to; }, inM = function (m) { return !!m && m >= P.from.slice(0, 7) && m <= P.to.slice(0, 7); };
-    var legacy = g(function () { return SQUAD_LEGACY; }, false), demo = g(function () { return isDemoMode; }, true) || !s;
-    var squads = (R.squadList || []).filter(function (x) { return R.squads[x.id]; });
-    var sets = [];
-    if (legacy || !squads.length || demo) {
-      sets.push({ name: g(function () { return (SQUADS.find(function (x) { return x.id === ACTIVE_SQUAD; }) || {}).name; }, '') || 'Squad', members: R.members, exp: g(function () { return expenses; }, []), prev: g(function () { return prevBals; }, []), set: g(function () { return settlements; }, []) });
-    } else {
-      for (var k = 0; k < squads.length; k++) {
-        var sq = squads[k], ids = sq.member_ids || [], mem = R.people.filter(function (m) { return ids.indexOf(m.id) >= 0; });
-        if (sq.id === R.active) sets.push({ name: sq.name, members: mem.length ? mem : R.members, exp: g(function () { return expenses; }, []), prev: g(function () { return prevBals; }, []), set: g(function () { return settlements; }, []) });
-        else {
-          var r = await Promise.all([s.from('expenses').select('*').eq('squad_id', sq.id), s.from('prev_balances').select('*').eq('squad_id', sq.id), s.from('settlements').select('*').eq('squad_id', sq.id)]);
-          sets.push({ name: sq.name, members: mem, exp: r[0].data || [], prev: r[1].data || [], set: r[2].data || [] });
-        }
-      }
-    }
-    var many = sets.length > 1, nameOf = {}; R.people.concat(R.members).forEach(function (m) { nameOf[m.id] = m.name; });
-    var pick = function (id) { return !!R.picked[id]; }, anyPick = Object.keys(R.picked).some(function (k) { return R.picked[k]; });
+  function squadTables(sets, ctx) {
+    var P = ctx.P, inR = function (d) { return !!d && d >= P.from && d <= P.to; }, inM = function (m) { return !!m && m >= P.from.slice(0, 7) && m <= P.to.slice(0, 7); };
+    var many = sets.length > 1, nameOf = {}; ctx.people.concat(ctx.members).forEach(function (m) { nameOf[m.id] = m.name; });
+    var pick = function (id) { return !!ctx.picked[id]; }, anyPick = Object.keys(ctx.picked).some(function (k) { return ctx.picked[k]; });
     var T = [], sumRows = [], expRows = [], setRows = [], prevRows = [], payRows = [], monthly = {}, perMember = {};
     var dateOfS = function (x) { return x.created_at ? String(x.created_at).slice(0, 10) : (x.month ? x.month + '-01' : ''); };
     sets.forEach(function (S) {
@@ -186,14 +171,14 @@
     var sr = sumRows.map(function (r) { return many ? r : r.slice(1); }), nCols = head.length, st = ['TOTAL']; for (var c = 1; c < nCols; c++) st.push(''); for (c = (many ? 2 : 1); c < nCols; c++) st[c] = sr.reduce(function (a, r) { return a + (Number(r[c]) || 0); }, 0);
     var numIdx = []; for (c = (many ? 2 : 1); c < nCols; c++) numIdx.push(c);
     T.push({ sheet: 'Summary', title: 'Members — paid, share and net for the period', head: head, rows: sr, total: sr.length ? st : null, num: numIdx });
-    if (R.group === 'month') {
-      var ms = Object.keys(monthly).sort(), cols = R.members.filter(function (m) { return !anyPick || pick(m.id); }), rows = ms.map(function (m) { var v = cols.map(function (x) { return monthly[m][x.id] || 0; }); return [monthLabel(m)].concat(v, [v.reduce(function (a, b) { return a + b; }, 0)]); });
+    if (ctx.group === 'month') {
+      var ms = Object.keys(monthly).sort(), cols = ctx.members.filter(function (m) { return !anyPick || pick(m.id); }), rows = ms.map(function (m) { var v = cols.map(function (x) { return monthly[m][x.id] || 0; }); return [monthLabel(m)].concat(v, [v.reduce(function (a, b) { return a + b; }, 0)]); });
       var tr = ['TOTAL']; for (c = 1; c <= cols.length + 1; c++) tr.push(rows.reduce(function (a, r) { return a + r[c]; }, 0));
       T.push({ sheet: 'Monthly', title: 'Paid per member per month', head: ['Month'].concat(cols.map(function (m) { return m.name; }), ['All']), rows: rows, total: rows.length ? tr : null, num: cols.map(function (m, i) { return i + 1; }).concat([cols.length + 1]) });
     }
-    if (R.sec.a) {
-      if (R.group === 'user') {
-        var who = R.members.filter(function (m) { return !anyPick || pick(m.id); });
+    if (ctx.sec.a) {
+      if (ctx.group === 'user') {
+        var who = ctx.members.filter(function (m) { return !anyPick || pick(m.id); });
         who.forEach(function (m) {
           var rows = expRows.filter(function (x) { return x.e.paid_by === m.id || (x.e.split_between || []).indexOf(m.id) >= 0; }).map(function (x) { var inSplit = (x.e.split_between || []).indexOf(m.id) >= 0; return [x.date].concat(many ? [x.sq] : [], [x.what, x.cat, x.by, x.amount, inSplit ? x.each : 0, x.e.paid_by === m.id ? 'yes' : '']); });
           var h = ['Date'].concat(many ? ['Squad'] : [], ['What', 'Category', 'Paid by', 'Amount', 'Your share', 'You paid']);
@@ -205,10 +190,161 @@
         T.push({ sheet: 'Expenses', title: 'Expenses in the period', head: h2, rows: rows2, total: rows2.length ? t2 : null, num: [ai2, h2.indexOf('Share each')] });
       }
     }
-    if (R.sec.b) T.push({ sheet: 'Settlements', title: 'Payments between members (settlements)', head: ['Date', 'Squad', 'From (paid)', 'To (received)', 'Amount'], rows: setRows, total: setRows.length ? totalOf(setRows, 4, 5) : null, num: [4] });
-    if (R.sec.c) T.push({ sheet: 'Carried in', title: 'Balances carried in from the previous month', head: ['Month', 'Squad', 'From (owes)', 'To (is owed)', 'Amount'], rows: prevRows, total: prevRows.length ? totalOf(prevRows, 4, 5) : null, num: [4] });
-    if (R.sec.d) T.push({ sheet: 'Who pays whom', title: 'Smallest set of payments that settles the period', head: ['Squad', 'From', 'To', 'Amount'], rows: payRows, total: payRows.length ? totalOf(payRows, 3, 4) : null, num: [3] });
+    if (ctx.sec.b) T.push({ sheet: 'Settlements', title: 'Payments between members (settlements)', head: ['Date', 'Squad', 'From (paid)', 'To (received)', 'Amount'], rows: setRows, total: setRows.length ? totalOf(setRows, 4, 5) : null, num: [4] });
+    if (ctx.sec.c) T.push({ sheet: 'Carried in', title: 'Balances carried in from the previous month', head: ['Month', 'Squad', 'From (owes)', 'To (is owed)', 'Amount'], rows: prevRows, total: prevRows.length ? totalOf(prevRows, 4, 5) : null, num: [4] });
+    if (ctx.sec.d) T.push({ sheet: 'Who pays whom', title: 'Smallest set of payments that settles the period', head: ['Squad', 'From', 'To', 'Amount'], rows: payRows, total: payRows.length ? totalOf(payRows, 3, 4) : null, num: [3] });
+    return { T: T, many: many, anyPick: anyPick, monthly: monthly };
+  }
+
+  async function squadModel() {
+    var s = SB(), P = periodOf(R), inR = function (d) { return !!d && d >= P.from && d <= P.to; }, inM = function (m) { return !!m && m >= P.from.slice(0, 7) && m <= P.to.slice(0, 7); };
+    var legacy = g(function () { return SQUAD_LEGACY; }, false), demo = g(function () { return isDemoMode; }, true) || !s;
+    var squads = (R.squadList || []).filter(function (x) { return R.squads[x.id]; });
+    var sets = [];
+    if (legacy || !squads.length || demo) {
+      sets.push({ name: g(function () { return (SQUADS.find(function (x) { return x.id === ACTIVE_SQUAD; }) || {}).name; }, '') || 'Squad', members: R.members, exp: g(function () { return expenses; }, []), prev: g(function () { return prevBals; }, []), set: g(function () { return settlements; }, []) });
+    } else {
+      for (var k = 0; k < squads.length; k++) {
+        var sq = squads[k], ids = sq.member_ids || [], mem = R.people.filter(function (m) { return ids.indexOf(m.id) >= 0; });
+        if (sq.id === R.active) sets.push({ name: sq.name, members: mem.length ? mem : R.members, exp: g(function () { return expenses; }, []), prev: g(function () { return prevBals; }, []), set: g(function () { return settlements; }, []) });
+        else {
+          var r = await Promise.all([s.from('expenses').select('*').eq('squad_id', sq.id), s.from('prev_balances').select('*').eq('squad_id', sq.id), s.from('settlements').select('*').eq('squad_id', sq.id)]);
+          sets.push({ name: sq.name, members: mem, exp: r[0].data || [], prev: r[1].data || [], set: r[2].data || [] });
+        }
+      }
+    }
+    var res = squadTables(sets, { P: P, people: R.people.concat(R.members), members: R.members, picked: R.picked, sec: R.sec, group: R.group }), T = res.T, many = res.many, anyPick = res.anyPick;
     return { title: 'Squad Split report', subtitle: P.label + ' · ' + (many ? sets.map(function (x) { return x.name; }).join(' + ') : sets[0].name) + (anyPick && Object.keys(R.picked).filter(function (k) { return R.picked[k]; }).length < R.members.length ? ' · selected members only' : '') + ' · amounts in AED', tables: T, file: 'squad-report_' + (P.from === '1970-01-01' ? 'all' : P.from + '_to_' + P.to) };
+  }
+
+  /* ============================== ALL MODULES (Hub report) ============================== */
+  var MODS = [['bill', '🧾 Bill Tracker'], ['squad', '👥 Squad Split'], ['et', '🪙 Expense / Trip / Event trackers'], ['bp', '📈 Budget planner'], ['pl', '📅 EPP & Gold plans']];
+  var XSEC = { squad: [['sq_a', 'Squad expenses'], ['sq_b', 'Settlements'], ['sq_c', 'Carried-in balances'], ['sq_d', 'Who pays whom']], et: [['et_a', 'Tracker summary'], ['et_b', 'Entries'], ['et_c', 'Spent by person']], bp: [['bp_a', 'Monthly summary'], ['bp_b', 'Income & planned lines'], ['bp_c', 'Goals']], pl: [['pl_a', 'Plans'], ['pl_b', 'Instalments']] };
+  function usersOf() {
+    var us = R.scope === 'all' ? R.users.slice() : R.scope === 'pick' ? R.users.filter(function (u) { return R.picked[String(u.email).toLowerCase()]; }) : R.users.filter(function (u) { return String(u.email).toLowerCase() === R.cur; });
+    if (!us.length) us = [{ email: R.cur, name: R.cur }];
+    return us.map(function (u) { return { email: u.email, name: u.name || u.email }; });
+  }
+  /* table whose rows carry the owner name at index 0; the User column is shown only when several users are included. num / sum are column indexes WITHOUT the User column */
+  function tbl(many, sheet, title, head, rows, num, sum) {
+    var sh = many ? 1 : 0, h = many ? ['User'].concat(head) : head, rr = rows.map(function (r) { return many ? r : r.slice(1); });
+    var nn = num.map(function (i) { return i + sh; }), sc = (sum || []).map(function (i) { return i + sh; }), total = null;
+    if (rr.length && sc.length) { total = h.map(function () { return ''; }); total[0] = 'TOTAL'; sc.forEach(function (i) { total[i] = rr.reduce(function (a, r) { return a + (Number(r[i]) || 0); }, 0); }); }
+    return { sheet: sheet, title: title, head: h, rows: rr, total: total, num: nn };
+  }
+  function effOf(kind, r, allPaid) {
+    if (!r) return 'active'; if (r.status === 'completed') return 'completed'; if (r.auto_complete === false) return 'active';
+    var t = today(), ym = t.slice(0, 7);
+    switch (kind) {
+      case 'et': return r.end_date && r.end_date < t ? 'completed' : 'active';
+      case 'plan': return allPaid ? 'completed' : 'active';
+      case 'item': return r.month && r.month < ym ? 'completed' : 'active';
+      case 'income': return (r.month && r.month < ym) || (r.pay_date && r.pay_date <= t) ? 'completed' : 'active';
+      case 'goal': return Number(r.target) > 0 && Number(r.saved) >= Number(r.target) ? 'completed' : 'active';
+    }
+    return 'active';
+  }
+  var chunks = function (a, n) { var o = []; for (var i = 0; i < a.length; i += n) o.push(a.slice(i, i + n)); return o; };
+  async function byIds(s, table, col, ids) { var out = []; var cs = chunks(ids, 100); for (var i = 0; i < cs.length; i++) { var r = await s.from(table).select('*').in(col, cs[i]); out = out.concat(r.data || []); } return out; }
+  var sumBy = function (o, k, v) { o[k] = (o[k] || 0) + v; };
+
+  async function squadPartAll(users, P, s) {
+    var r = await Promise.all([s.from('members_config').select('*'), s.from('squads').select('*'), s.from('squad_members').select('squad_id,member_id'), s.from('expenses').select('*'), s.from('prev_balances').select('*'), s.from('settlements').select('*')]);
+    var people = r[0].data || [], legacy = !!r[1].error, emails = users.map(function (u) { return String(u.email).toLowerCase(); }), picked = {};
+    people.forEach(function (m) { if (m.email && emails.indexOf(String(m.email).toLowerCase()) >= 0) picked[m.id] = true; });
+    var none = { T: [{ sheet: 'Squad Split', title: 'Squad Split — the selected user(s) are not members of any squad', head: ['Info'], rows: [], total: null, num: [] }], monthly: {} };
+    if (!Object.keys(picked).length) return none;
+    var sets = [];
+    if (legacy) sets.push({ name: 'Squad', members: people, exp: r[3].data || [], prev: r[4].data || [], set: r[5].data || [] });
+    else {
+      var sm = r[2].data || [];
+      (r[1].data || []).filter(function (x) { return !x.is_archived; }).forEach(function (sq) {
+        var ids = sm.filter(function (x) { return x.squad_id === sq.id; }).map(function (x) { return x.member_id; });
+        if (!ids.some(function (id) { return picked[id]; })) return;
+        var by = function (a) { return (a || []).filter(function (x) { return x.squad_id === sq.id; }); };
+        sets.push({ name: sq.name, members: people.filter(function (m) { return ids.indexOf(m.id) >= 0; }), exp: by(r[3].data), prev: by(r[4].data), set: by(r[5].data) });
+      });
+    }
+    if (!sets.length) return none;
+    var res = squadTables(sets, { P: P, people: people, members: people, picked: picked, sec: { a: R.xs.sq_a, b: R.xs.sq_b, c: R.xs.sq_c, d: R.xs.sq_d }, group: R.group });
+    res.T.forEach(function (t) { if (t.sheet === 'Summary') t.sheet = 'Squad summary'; if (t.sheet === 'Monthly') t.sheet = 'Squad monthly'; t.title = 'Squad Split — ' + t.title; });
+    var mo = {}; Object.keys(res.monthly).forEach(function (m) { Object.keys(res.monthly[m]).forEach(function (k) { sumBy(mo, m, res.monthly[m][k]); }); });
+    return { T: res.T, monthly: mo };
+  }
+
+  async function etPart(users, P, s, many) {
+    var inR = function (d) { return !!d && d >= P.from && d <= P.to; }, trs = [];
+    await Promise.all(users.map(async function (u) { var r = await s.from('et_trackers').select('*').ilike('user_email', like(u.email)); (r.data || []).forEach(function (t) { t.__o = u.name; trs.push(t); }); }));
+    var pickedEv = Object.keys(R.events).filter(function (k) { return R.events[k]; });
+    var cand = trs.filter(function (t) { return pickedEv.length ? R.events[t.id] : ((!t.start_date || t.start_date <= P.to) && (!t.end_date || t.end_date >= P.from)); });
+    cand.sort(function (a, b) { return String(a.start_date || '') < String(b.start_date || '') ? -1 : 1; });
+    var ents = (await byIds(s, 'et_entries', 'tracker_id', cand.map(function (t) { return t.id; }))).filter(function (e) { return inR(e.entry_date); });
+    var T = [], monthly = {}, nm = {}; cand.forEach(function (t) { nm[t.id] = t; });
+    ents.forEach(function (e) { sumBy(monthly, String(e.entry_date).slice(0, 7), Number(e.amount) || 0); });
+    if (R.xs.et_a) T.push(tbl(many, 'Trackers', 'Expense / Trip / Event trackers in the period', ['Tracker', 'Type', 'From', 'To', 'Status', 'Entries', 'Spent'], cand.map(function (t) { var es = ents.filter(function (e) { return e.tracker_id === t.id; }); return [t.__o, t.title, t.kind, t.start_date || '', t.end_date || '', effOf('et', t), es.length, es.reduce(function (a, e) { return a + (Number(e.amount) || 0); }, 0)]; }), [6], [5, 6]));
+    if (R.xs.et_b) {
+      var row = function (e) { var t = nm[e.tracker_id] || {}; return [t.__o, e.entry_date, t.title || '', e.category || '', e.spent_by || '', e.note || '', Number(e.amount) || 0]; };
+      if (R.group === 'user') cand.forEach(function (t) { var es = ents.filter(function (e) { return e.tracker_id === t.id; }).sort(function (a, b) { return a.entry_date < b.entry_date ? -1 : 1; }); T.push(tbl(many, t.title, 'Entries — ' + t.title, ['Date', 'Tracker', 'Category', 'Spent by', 'Note', 'Amount'], es.map(row), [5], [5])); });
+      else T.push(tbl(many, 'Tracker entries', 'Tracker entries in the period', ['Date', 'Tracker', 'Category', 'Spent by', 'Note', 'Amount'], ents.slice().sort(function (a, b) { return a.entry_date < b.entry_date ? -1 : 1; }).map(row), [5], [5]));
+    }
+    if (R.xs.et_c) {
+      var agg = {}; ents.forEach(function (e) { var t = nm[e.tracker_id] || {}, k = e.tracker_id + '|' + (e.spent_by || '—'); (agg[k] = agg[k] || { o: t.__o, t: t.title || '', p: e.spent_by || '—', n: 0, a: 0 }); agg[k].n++; agg[k].a += Number(e.amount) || 0; });
+      T.push(tbl(many, 'Spent by person', 'Who spent what (per tracker)', ['Tracker', 'Person', 'Entries', 'Spent'], Object.keys(agg).map(function (k) { var x = agg[k]; return [x.o, x.t, x.p, x.n, x.a]; }), [3], [2, 3]));
+    }
+    return { T: T, monthly: monthly };
+  }
+
+  async function bpPart(users, P, s, many) {
+    var inM = function (m) { return !!m && m >= P.from.slice(0, 7) && m <= P.to.slice(0, 7); }, inR = function (d) { return !!d && d >= P.from && d <= P.to; };
+    var inc = [], itm = [], gl = [];
+    await Promise.all(users.map(async function (u) {
+      var q = function (t) { return s.from(t).select('*').ilike('user_email', like(u.email)); }, r = await Promise.all([q('bp_income'), q('bp_items'), q('bp_goals')]);
+      (r[0].data || []).forEach(function (x) { if (x.month ? inM(x.month) : inR(x.pay_date)) { x.__o = u.name; inc.push(x); } });
+      (r[1].data || []).forEach(function (x) { if (inM(x.month)) { x.__o = u.name; itm.push(x); } });
+      (r[2].data || []).forEach(function (x) { x.__o = u.name; gl.push(x); });
+    }));
+    var T = [], mi = {}, mp = {}, sm = {};
+    inc.forEach(function (x) { var m = x.month || String(x.pay_date).slice(0, 7); sumBy(mi, m, Number(x.amount) || 0); var k = x.__o + '|' + m; (sm[k] = sm[k] || { o: x.__o, m: m, i: 0, p: 0 }).i += Number(x.amount) || 0; });
+    itm.forEach(function (x) { sumBy(mp, x.month, Number(x.planned) || 0); var k = x.__o + '|' + x.month; (sm[k] = sm[k] || { o: x.__o, m: x.month, i: 0, p: 0 }).p += Number(x.planned) || 0; });
+    if (R.xs.bp_a) T.push(tbl(many, 'Budget summary', 'Budget — income vs planned per month', ['Month', 'Income', 'Planned', 'Left'], Object.keys(sm).sort(function (a, b) { return sm[a].m < sm[b].m ? -1 : sm[a].m > sm[b].m ? 1 : 0; }).map(function (k) { var x = sm[k]; return [x.o, monthLabel(x.m), x.i, x.p, x.i - x.p]; }), [1, 2, 3], [1, 2, 3]));
+    if (R.xs.bp_b) {
+      T.push(tbl(many, 'Budget income', 'Budget — income', ['Month', 'Source', 'Type', 'Pay date', 'Amount', 'Status'], inc.sort(function (a, b) { return String(a.month) < String(b.month) ? -1 : 1; }).map(function (x) { return [x.__o, x.month || '', x.source || '', x.kind || '', x.pay_date || '', Number(x.amount) || 0, effOf('income', x)]; }), [4], [4]));
+      T.push(tbl(many, 'Budget lines', 'Budget — planned lines', ['Month', 'Category', 'Bucket', 'Planned', 'Status'], itm.sort(function (a, b) { return a.month < b.month ? -1 : 1; }).map(function (x) { return [x.__o, x.month, x.category || '', x.bucket || '', Number(x.planned) || 0, effOf('item', x)]; }), [3], [3]));
+    }
+    if (R.xs.bp_c) T.push(tbl(many, 'Budget goals', 'Savings goals (all, with progress)', ['Goal', 'Target', 'Saved', 'Progress %', 'Due', 'Status'], gl.map(function (x) { var tg = Number(x.target) || 0, sv = Number(x.saved) || 0; return [x.__o, x.name || '', tg, sv, tg > 0 ? Math.round(sv / tg * 100) : 0, x.due_date || '', effOf('goal', x)]; }), [1, 2, 3], [1, 2]));
+    return { T: T, inc: mi, plan: mp };
+  }
+
+  async function plPart(users, P, s, many) {
+    var inR = function (d) { return !!d && d >= P.from && d <= P.to; }, plans = [];
+    await Promise.all(users.map(async function (u) { var r = await s.from('bill_plans').select('*').ilike('user_email', like(u.email)); (r.data || []).forEach(function (x) { x.__o = u.name; plans.push(x); }); }));
+    var pays = await byIds(s, 'bill_plan_payments', 'plan_id', plans.map(function (x) { return x.id; }));
+    var keep = plans.filter(function (pl) { return ((!pl.start_date || pl.start_date <= P.to) && (!pl.end_date || pl.end_date >= P.from)) || pays.some(function (x) { return x.plan_id === pl.id && inR(x.due_date); }); });
+    var T = [], monthly = {}, nm = {}; keep.forEach(function (x) { nm[x.id] = x; });
+    var inst = pays.filter(function (x) { return nm[x.plan_id] && inR(x.due_date); }).sort(function (a, b) { return a.due_date < b.due_date ? -1 : 1; });
+    inst.forEach(function (x) { sumBy(monthly, String(x.due_date).slice(0, 7), Number(x.amount) || 0); });
+    if (R.xs.pl_a) T.push(tbl(many, 'Plans', 'EPP & Gold plans', ['Type', 'Plan', 'Event', 'Total', 'Instalments', 'Paid', 'Left to pay', 'Start', 'End', 'Status'], keep.map(function (pl) { var ps = pays.filter(function (x) { return x.plan_id === pl.id; }), paid = ps.filter(function (x) { return x.status === 'paid'; }), left = ps.filter(function (x) { return x.status !== 'paid'; }).reduce(function (a, x) { return a + (Number(x.amount) || 0); }, 0); return [pl.__o, pl.plan_type || '', pl.title || '', pl.event_name || '', Number(pl.total_amount) || 0, pl.installments || ps.length, paid.length, left, pl.start_date || '', pl.end_date || '', effOf('plan', pl, ps.length > 0 && paid.length === ps.length)]; }), [3, 6], [3, 6]));
+    if (R.xs.pl_b) T.push(tbl(many, 'Instalments', 'Instalments due in the period', ['Plan', '#', 'Due', 'Amount', 'Status', 'Paid on'], inst.map(function (x) { var pl = nm[x.plan_id]; return [pl.__o, pl.title || '', x.seq, x.due_date, Number(x.amount) || 0, x.status || '', x.paid_at ? String(x.paid_at).slice(0, 10) : '']; }), [3], [3]));
+    return { T: T, monthly: monthly };
+  }
+
+  async function allModel() {
+    var s = SB(); if (!s) throw new Error('Reports need the live database (demo mode has no database).');
+    var P = periodOf(R), users = usersOf(), many = users.length > 1, T = [], OV = {}, names = [], on = MODS.filter(function (m) { return R.mods[m[0]]; });
+    var ov = function (m) { return OV[m] || (OV[m] = { bill: 0, sq: 0, et: 0, bi: 0, bp: 0, pl: 0 }); };
+    if (R.mods.bill) { var b = await billPart(users, P, s); T = T.concat(b.T); b.per.forEach(function (u) { u.exp.forEach(function (x) { ov(x.date.slice(0, 7)).bill += x.amount; }); }); names.push('Bill Tracker'); }
+    if (R.mods.squad) { var q = await squadPartAll(users, P, s); T = T.concat(q.T); Object.keys(q.monthly).forEach(function (m) { ov(m).sq += q.monthly[m]; }); names.push('Squad Split'); }
+    if (R.mods.et) { var e = await etPart(users, P, s, many); T = T.concat(e.T); Object.keys(e.monthly).forEach(function (m) { ov(m).et += e.monthly[m]; }); names.push('Trackers'); }
+    if (R.mods.bp) { var bp = await bpPart(users, P, s, many); T = T.concat(bp.T); Object.keys(bp.inc).forEach(function (m) { ov(m).bi += bp.inc[m]; }); Object.keys(bp.plan).forEach(function (m) { ov(m).bp += bp.plan[m]; }); names.push('Budget'); }
+    if (R.mods.pl) { var pl = await plPart(users, P, s, many); T = T.concat(pl.T); Object.keys(pl.monthly).forEach(function (m) { ov(m).pl += pl.monthly[m]; }); names.push('Plans'); }
+    if (on.length > 1) {
+      var cols = [['bill', 'Bill spending', 'bill'], ['squad', 'Squad paid', 'sq'], ['et', 'Tracker spending', 'et'], ['bp', 'Budget income', 'bi'], ['bp', 'Budget planned', 'bp'], ['pl', 'Plan instalments due', 'pl']].filter(function (c) { return R.mods[c[0]]; });
+      var rows = Object.keys(OV).sort().map(function (m) { return [monthLabel(m)].concat(cols.map(function (c) { return OV[m][c[2]]; })); }), tot = ['TOTAL'];
+      cols.forEach(function (c, i) { tot.push(rows.reduce(function (a, r) { return a + r[i + 1]; }, 0)); });
+      T.unshift({ sheet: 'Overview', title: 'Month-by-month overview of the selected modules', head: ['Month'].concat(cols.map(function (c) { return c[1]; })), rows: rows, total: rows.length ? tot : null, num: cols.map(function (c, i) { return i + 1; }) });
+    }
+    var single = on.length === 1 && R.mods.bill && !R.all;
+    return { title: single ? 'Bill Tracker report' : 'iFiNeX report', subtitle: P.label + ' · ' + names.join(' + ') + ' · ' + (many ? users.length + ' users' : users[0].name) + ' · amounts in AED', tables: T, file: (single ? 'bill-report_' : 'ifinex-report_') + (P.from === '1970-01-01' ? 'all' : P.from + '_to_' + P.to) };
   }
 
   /* ============================== RENDER / EXPORT ============================== */
@@ -296,7 +432,10 @@
   }
   var chip = function (k, v, label, on) { return '<button type="button" class="chip' + (on ? ' on' : '') + '" data-k="' + k + '" data-v="' + esc(v) + '">' + esc(label) + '</button>'; };
   function paint() {
-    var bill = R.mod === 'bill', P = periodOf(R), h = '<button class="x" data-a="close" aria-label="Close">✕</button><h3>📊 ' + (bill ? 'Bill Tracker' : 'Squad Split') + ' reports</h3><div class="sub">Choose what you want, then preview or download. Nothing is changed in your data.</div>';
+    var bill = R.mod === 'bill', P = periodOf(R), h = '<button class="x" data-a="close" aria-label="Close">✕</button><h3>📊 ' + (R.all ? 'Reports — all modules' : bill ? 'Bill Tracker reports' : 'Squad Split reports') + '</h3><div class="sub">Choose what you want, then preview or download. Nothing is changed in your data.</div>';
+    if (bill) {
+      h += '<div class="lab">Modules</div><div class="chips">' + chip('modsall', '1', 'All modules', MODS.every(function (m) { return R.mods[m[0]]; })) + MODS.map(function (m) { return chip('mod', m[0], m[1], !!R.mods[m[0]]); }).join('') + '</div>';
+    }
     h += '<div class="lab">Period</div><div class="chips">' + PRESETS.map(function (p) { return chip('preset', p[0], p[1], R.preset === p[0]); }).join('') + '</div>';
     if (R.preset === 'month') h += '<div class="row"><input type="month" data-f="month" value="' + esc(R.month) + '" aria-label="Month"></div>';
     if (R.preset === 'custom') h += '<div class="row"><input type="date" data-f="from" value="' + esc(R.from) + '" aria-label="From"><span>→</span><input type="date" data-f="to" value="' + esc(R.to) + '" aria-label="To"></div>';
@@ -310,9 +449,18 @@
       if (R.squadList && R.squadList.length > 1) h += '<div class="lab">Squads</div><div class="chips">' + R.squadList.map(function (s) { return chip('squad', s.id, (s.emoji || '') + ' ' + s.name, !!R.squads[s.id]); }).join('') + '</div>';
       h += '<div class="lab">Members</div><div class="row"><button type="button" class="chip" data-a="allu">All</button><button type="button" class="chip" data-a="nou">None (= all)</button></div><div class="pk">' + R.members.map(function (m) { return '<label class="ck"><input type="checkbox" data-u="' + esc(m.id) + '"' + (R.picked[m.id] ? ' checked' : '') + '> ' + esc((m.emoji || '') + ' ' + m.name) + '</label>'; }).join('') + '</div>';
     }
+    if (bill && R.mods.et) {
+      var scopeEm = R.scope === 'all' ? null : R.scope === 'pick' ? Object.keys(R.picked).filter(function (k) { return R.picked[k]; }) : [R.cur];
+      var tl = (R.trackers || []).filter(function (t) { return !scopeEm || scopeEm.indexOf(String(t.user_email).toLowerCase()) >= 0; }).slice(0, 120), ico = { trip: '✈️', occasion: '🎟️', period: '🪙' };
+      h += '<div class="lab">Trackers / events</div><div class="sub">Nothing ticked = every tracker that overlaps the period. Tick one or more to report only that trip, event or tracker.</div>';
+      h += tl.length ? '<div class="pk">' + tl.map(function (t) { return '<label class="ck"><input type="checkbox" data-e="' + esc(t.id) + '"' + (R.events[t.id] ? ' checked' : '') + '> ' + esc((ico[t.kind] || '🪙') + ' ' + t.title) + '</label>'; }).join('') + '</div>' : '<div class="sub">No trackers found for the selected users.</div>';
+    }
     h += '<div class="lab">Layout</div><div class="chips">' + chip('group', 'user', bill ? 'One section per user' : 'One section per member', R.group === 'user') + chip('group', 'combined', 'One combined table', R.group === 'combined') + chip('group', 'month', 'Monthly summary + tables', R.group === 'month') + '</div>';
     var secs = bill ? [['a', 'Spending'], ['b', 'Owed to admin'], ['c', 'Payments to admin'], ['d', 'Party ledger'], ['e', 'Balances now']] : [['a', 'Expenses'], ['b', 'Settlements'], ['c', 'Carried-in balances'], ['d', 'Who pays whom']];
-    h += '<div class="lab">Include</div><div class="chips">' + secs.map(function (s) { return '<label class="ck"><input type="checkbox" data-s="' + s[0] + '"' + (R.sec[s[0]] ? ' checked' : '') + '> ' + esc(s[1]) + '</label>'; }).join('') + '</div>';
+    var ck = function (attr, k, on, label) { return '<label class="ck"><input type="checkbox" ' + attr + '="' + k + '"' + (on ? ' checked' : '') + '> ' + esc(label) + '</label>'; };
+    h += '<div class="lab">Include</div>';
+    if (!bill || R.mods.bill) h += (bill && R.all ? '<div class="sub" style="margin:2px 0;">🧾 Bill Tracker</div>' : '') + '<div class="chips">' + secs.map(function (x) { return ck('data-s', x[0], R.sec[x[0]], x[1]); }).join('') + '</div>';
+    if (bill) MODS.forEach(function (m) { if (m[0] !== 'bill' && R.mods[m[0]]) h += '<div class="sub" style="margin:6px 0 2px;">' + esc(m[1]) + '</div><div class="chips">' + XSEC[m[0]].map(function (x) { return ck('data-xs', x[0], R.xs[x[0]], x[1]); }).join('') + '</div>'; });
     h += '<div class="acts"><button data-a="prev" ' + (busy ? 'disabled' : '') + '>👁 Preview</button><button data-a="pdf" ' + (busy ? 'disabled' : '') + '>⬇ PDF</button><button data-a="xlsx" ' + (busy ? 'disabled' : '') + '>⬇ Excel</button><button class="g" data-a="csv" ' + (busy ? 'disabled' : '') + '>⬇ CSV</button></div><div class="msg" id="rp-msg" role="status"></div><div id="rp-prev">' + (MODEL ? previewHtml(MODEL) : '') + '</div>';
     var scroll = OV.querySelector('.box') ? OV.querySelector('.box').scrollTop : 0;
     OV.innerHTML = '<div class="box">' + h + '</div>'; var bx = OV.querySelector('.box'); if (bx) bx.scrollTop = scroll;
@@ -321,6 +469,8 @@
   function onClick(e) {
     var t = e.target.closest ? e.target.closest('[data-k],[data-a]') : null; if (!t) { if (e.target === OV) close(); return; }
     var a = t.getAttribute('data-a'), k = t.getAttribute('data-k'), v = t.getAttribute('data-v');
+    if (k === 'mod') { R.mods[v] = !R.mods[v]; if (!MODS.some(function (m) { return R.mods[m[0]]; })) R.mods[v] = true; MODEL = null; return paint(); }
+    if (k === 'modsall') { var allOn = MODS.every(function (m) { return R.mods[m[0]]; }); MODS.forEach(function (m) { R.mods[m[0]] = !allOn; }); if (allOn) R.mods.bill = true; MODEL = null; return paint(); }
     if (k) { if (k === 'squad') { var id = isNaN(+v) ? v : +v; R.squads[id] = !R.squads[id]; if (!Object.keys(R.squads).some(function (x) { return R.squads[x]; })) R.squads[id] = true; } else R[k] = v; MODEL = null; return paint(); }
     if (a === 'close') return close();
     if (a === 'allu') { (R.mod === 'bill' ? R.users.map(function (u) { return String(u.email).toLowerCase(); }) : R.members.map(function (m) { return m.id; })).forEach(function (x) { R.picked[x] = true; }); MODEL = null; return paint(); }
@@ -331,14 +481,18 @@
     var t = e.target; MODEL = null;
     if (t.getAttribute('data-f')) { R[t.getAttribute('data-f')] = t.value; return; }
     if (t.getAttribute('data-u') != null) { R.picked[t.getAttribute('data-u')] = t.checked; return; }
+    if (t.getAttribute('data-xs')) { R.xs[t.getAttribute('data-xs')] = t.checked; return; }
+    if (t.getAttribute('data-e')) { R.events[t.getAttribute('data-e')] = t.checked; return; }
     if (t.getAttribute('data-s')) { R.sec[t.getAttribute('data-s')] = t.checked; }
   }
   async function build() {
     var P = periodOf(R);
     if (P.from > P.to) throw new Error('"From" is after "To" — swap the dates.');
     if (R.mod === 'bill' && R.scope === 'pick' && !R.users.some(function (u) { return R.picked[String(u.email).toLowerCase()]; })) throw new Error('Tick at least one user.');
-    if (!Object.keys(R.sec).some(function (k) { return R.sec[k]; })) throw new Error('Tick at least one section to include.');
-    return R.mod === 'bill' ? billModel() : squadModel();
+    if (R.mod === 'squad') { if (!Object.keys(R.sec).some(function (k) { return R.sec[k]; })) throw new Error('Tick at least one section to include.'); return squadModel(); }
+    var okSec = (R.mods.bill && ['a', 'b', 'c', 'd', 'e'].some(function (k) { return R.sec[k]; })) || MODS.some(function (m) { return m[0] !== 'bill' && R.mods[m[0]] && XSEC[m[0]].some(function (x) { return R.xs[x[0]]; }); });
+    if (!okSec) throw new Error('Tick at least one section to include.');
+    return allModel();
   }
   async function run(kind) {
     if (busy) return; busy = true; var btns = OV.querySelectorAll('.acts button'); btns.forEach(function (b) { b.disabled = true; }); say('Working…');
@@ -354,9 +508,9 @@
     busy = false; btns = OV.querySelectorAll('.acts button'); btns.forEach(function (b) { b.disabled = false; });
   }
   async function open(mod) {
-    ensureDom(); R = fresh(mod === 'squad' ? 'squad' : 'bill'); MODEL = null; busy = false;
+    ensureDom(); R = fresh(mod === 'squad' ? 'squad' : 'bill'); R.all = (mod === 'all'); if (R.all) MODS.forEach(function (m) { R.mods[m[0]] = true; }); MODEL = null; busy = false;
     OV.innerHTML = '<div class="box"><button class="x" data-a="close">✕</button><div class="sub">Loading…</div></div>'; OV.classList.add('open');
-    try { if (R.mod === 'bill') await loadBillUsers(); else loadSquadPeople(); } catch (e) { console.error(e); }
+    try { if (R.mod === 'bill') { await loadBillUsers(); try { var tr = await SB().from('et_trackers').select('id,user_email,kind,title,start_date,end_date,status').order('created_at', { ascending: false }).limit(300); R.trackers = tr.data || []; } catch (e3) { R.trackers = []; } } else loadSquadPeople(); } catch (e) { console.error(e); }
     paint();
   }
   function close() { if (OV) OV.classList.remove('open'); }
