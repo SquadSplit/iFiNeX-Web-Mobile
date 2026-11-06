@@ -119,7 +119,7 @@
           T.push({ sheet: m.name, title: 'Expenses — ' + m.name, head: h, rows: rows, total: rows.length ? (function () { var t = h.map(function () { return ''; }); t[0] = 'TOTAL'; var ai = h.indexOf('Amount'), si = h.indexOf('Your share'); t[ai] = rows.reduce(function (a, r) { return a + r[ai]; }, 0); t[si] = rows.reduce(function (a, r) { return a + r[si]; }, 0); return t; })() : null, num: [h.indexOf('Amount'), h.indexOf('Your share')] });
         });
       } else {
-        var h2 = ['Date'].concat(many ? ['Squad'] : [], ['What', 'Category', 'Paid by', 'Amount', 'Split between', 'Share each']), rows2 = expRows.sort(function (a, b) { return a.date < b.date ? -1 : 1; }).map(function (x) { return [x.date].concat(many ? [x.sq] : [], [x.what, x.cat, x.by, x.amount, x.split, x.each]); });
+        var h2 = ['Date'].concat(many ? ['Squad'] : [], ['What', 'Category', 'Paid by', 'Amount', 'Split between', 'Share each']), rows2 = expRows.sort(function (a, b) { return a.date < b.date ? 1 : -1; }).map(function (x) { return [x.date].concat(many ? [x.sq] : [], [x.what, x.cat, x.by, x.amount, x.split, x.each]); });
         var ai2 = h2.indexOf('Amount'), t2 = h2.map(function () { return ''; }); t2[0] = 'TOTAL'; t2[ai2] = rows2.reduce(function (a, r) { return a + r[ai2]; }, 0);
         T.push({ sheet: 'Expenses', title: 'Expenses in the period', head: h2, rows: rows2, total: rows2.length ? t2 : null, num: [ai2, h2.indexOf('Share each')] });
       }
@@ -210,7 +210,7 @@
           sp.forEach(function (id) { if (id !== e.paid_by) add({ D: pk(id), C: pk(e.paid_by), mod: 'squad', sub: S.name, kind: 'charge', amt: amt / n, d: d, what: (e.name || 'Expense') + ' · ' + money(amt) + ' split ' + n + ' ways' }); });
         });
         S.set.forEach(function (x) { add({ D: pk(x.from_member), C: pk(x.to_member), mod: 'squad', sub: S.name, kind: 'paid', amt: x.amount, d: rowDate(x), what: 'Settlement' }); });
-        S.prev.forEach(function (b) { if (b.month) add({ D: pk(b.from_member), C: pk(b.to_member), mod: 'squad', sub: S.name, kind: 'carry', amt: b.amount, d: shiftMonth(b.month, 1) + '-01', what: 'Balance carried forward from ' + monthLabel(b.month) }); });
+        S.prev.forEach(function (b) { if (b.month) add({ D: pk(b.from_member), C: pk(b.to_member), mod: 'squad', sub: S.name, kind: 'carry', amt: b.amount, d: monthEnd(b.month), what: 'Balance carried forward from ' + monthLabel(b.month) }); });
       });
     }
 
@@ -246,112 +246,144 @@
       });
     }
     var nameOf = function (k) { return nm[k] || (k.indexOf('n:') === 0 ? k.slice(2).replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : k.split('@')[0]); };
-    return { EV: EV, nameOf: nameOf, sets: sets, people: people };
+    var pcache = {};
+    /* Squad page netting at a date: per squad, net of every member (expenses + carried balances − settlements) then "simplify" (biggest creditor vs biggest debtor) -> {'debtor|creditor': amount} */
+    var pairAt = function (date) {
+      if (pcache[date]) return pcache[date]; var by = {}, out = {};
+      EV.forEach(function (e) { if (e.mod !== 'squad' || e.d > date) return; var n = by[e.sub] || (by[e.sub] = {}), sg = e.kind === 'paid' ? -1 : 1; n[e.D] = (n[e.D] || 0) - sg * e.amt; n[e.C] = (n[e.C] || 0) + sg * e.amt; });
+      Object.keys(by).forEach(function (sq) {
+        var cr = [], dt = []; Object.keys(by[sq]).forEach(function (k) { var v = by[sq][k]; if (v > 0.01) cr.push({ k: k, a: v }); else if (v < -0.01) dt.push({ k: k, a: -v }); });
+        cr.sort(function (p, q) { return q.a - p.a; }); dt.sort(function (p, q) { return q.a - p.a; });
+        var i = 0, j = 0; while (i < cr.length && j < dt.length) { var pay = Math.min(cr[i].a, dt[j].a); if (pay > 0.01) { var kk = dt[j].k + '|' + cr[i].k; out[kk] = (out[kk] || 0) + pay; } cr[i].a -= pay; dt[j].a -= pay; if (cr[i].a < 0.01) i++; if (dt[j].a < 0.01) j++; }
+      });
+      return (pcache[date] = out);
+    };
+    return { EV: EV, nameOf: nameOf, sets: sets, people: people, pairAt: pairAt };
   }
 
-  /* balance of one ledger line (a person + a module) over the window [a,b].  carry = Squad Split (a month starts from the balance carried forward into it, exactly like the Squad page);
-     cumul = everything else (opening = every earlier charge − every earlier payment) */
-  function bucket(G, a, b) {
-    var open = 0, ch = 0, pd = 0, ms = a.slice(0, 7), i, e, c;
-    for (i = 0; i < G.ev.length; i++) {
-      e = G.ev[i]; c = e.kind === 'paid' ? -e.a : e.a;
-      if (G.mode === 'carry') { if (e.d.slice(0, 7) !== ms) continue; if (e.kind === 'carry') { open += c; continue; } if (e.d < a) { open += c; continue; } }
-      else if (e.d < a) { open += c; continue; }
-      if (e.d > b) continue;
-      if (e.kind === 'paid') pd += e.a; else if (e.kind === 'charge') ch += e.a;
-    }
-    return { open: open, ch: ch, pd: pd, close: open + ch - pd };
-  }
-
+  /* v12.2 — who-pays-whom statement.  Squad Split uses the SAME netting as the Squad page (all expenses + carried balances − settlements, then "simplify");
+     every other module is a running ledger.  Output per person: matrix "To pay <name>" · paid so far · one block per person (months newest first) · grand total LAST. */
   function ledgerTables(users, L, P, many, full) {
-    var td = today(), endEff = P.to < td ? P.to : td, nameOf = L.nameOf, uk = users.map(function (u) { return { k: lower(u.email), name: u.name }; }), groups = {}, per = {};
+    var td = today(), endEff = P.to < td ? P.to : td, nameOf = L.nameOf, uk = users.map(function (u) { return { k: lower(u.email), name: u.name }; }), groups = {};
+    var ORD = { squad: 0, admin: 1, party: 2, plan: 3, own: 4 };
+    var mk = function (sheet, title, head, rows, num, total, bold) { return { sheet: sheet, title: title, head: head, rows: rows, total: total || null, num: num, bold: bold || [] }; };
+    var gget = function (u, x, mod) { var gk = u.k + '|' + x + '|' + mod; return groups[gk] || (groups[gk] = { u: u, x: x, mod: mod, ev: [] }); };
     L.EV.forEach(function (ev) {
       uk.forEach(function (u) {
         var x, s; if (ev.D === u.k) { x = ev.C; s = 1; } else if (ev.C === u.k) { x = ev.D; s = -1; } else return;
-        var gk = u.k + '|' + x + '|' + ev.mod, G = groups[gk] || (groups[gk] = { u: u, x: x, mod: ev.mod, mode: ev.mod === 'squad' ? 'carry' : 'cumul', ev: [] });
-        G.ev.push({ d: ev.d, kind: ev.kind, a: s * ev.amt, abs: ev.amt, s: s, sub: ev.sub, what: ev.what });
+        gget(u, x, ev.mod).ev.push({ d: ev.d, kind: ev.kind, a: s * ev.amt, abs: ev.amt, s: s, sub: ev.sub, what: ev.what });
       });
     });
-    var gl = Object.keys(groups).map(function (k) { return groups[k]; });
-    gl.sort(function (p, q) { return p.u.name < q.u.name ? -1 : p.u.name > q.u.name ? 1 : (nameOf(p.x).toLowerCase() < nameOf(q.x).toLowerCase() ? -1 : nameOf(p.x).toLowerCase() > nameOf(q.x).toLowerCase() ? 1 : (p.mod < q.mod ? -1 : 1)); });
-    var hist = [], paidR = [], det = { squad: [], admin: [], party: [], plan: [], own: [] };
-    gl.forEach(function (G) {
-      G.ev.sort(function (p, q) { return p.d < q.d ? -1 : p.d > q.d ? 1 : (p.kind === 'carry' ? -1 : q.kind === 'carry' ? 1 : 0); });
-      var first = G.ev[0].d.slice(0, 7), startM = P.from <= '1970-01-01' ? first : P.from.slice(0, 7), endM = endEff.slice(0, 7), months = [], m = startM;
-      while (startM <= endM && m <= endM && months.length < 150) { months.push(m); m = shiftMonth(m, 1); }
-      var trail = months.map(function (mm) { var a = P.from > mm + '-01' ? P.from : mm + '-01', b = endEff < monthEnd(mm) ? endEff : monthEnd(mm), k = bucket(G, a, b); k.m = mm; k.a = a; k.b = b; return k; });
-      var now = trail.length ? trail[trail.length - 1] : { open: 0, ch: 0, pd: 0, close: 0 }, or = 1, i;
-      if (now.close < -EPS) or = -1; else if (now.close <= EPS) { for (i = trail.length - 1; i >= 0; i--) if (nz(trail[i].close)) { or = trail[i].close > 0 ? 1 : -1; break; } }
-      G.now = now; G.or = or;
-      G.up = G.ev.filter(function (e) { return e.kind === 'charge' && e.d > td && e.d <= P.to; }).reduce(function (a, e) { return a + e.a; }, 0);
-      trail.forEach(function (k) {
-        if (!(nz(k.open) || nz(k.ch) || nz(k.pd) || nz(k.close))) return;
-        var part = (k.a !== k.m + '-01' || k.b !== monthEnd(k.m)) ? ' (' + k.a.slice(8) + '–' + k.b.slice(8) + ')' : '';
-        hist.push([G.u.name, monthLabel(k.m) + part, nameOf(G.x), MODL[G.mod], or > 0 ? 'Pay' : 'Receive', r2(or * k.open), r2(or * k.ch), r2(or * k.pd), r2(or * k.close)]);
-      });
-      var pa = {};
-      G.ev.forEach(function (e) {
-        if (e.kind !== 'paid' || e.d > td) return;
-        var o = pa[e.s] || (pa[e.s] = { per: 0, tot: 0, n: 0, last: '', amt: 0 }); o.tot += e.abs;
-        if (e.d >= P.from && e.d <= endEff) { o.per += e.abs; o.n++; }
-        if (e.d >= o.last) { o.last = e.d; o.amt = e.abs; }
-      });
-      G.paid = pa;
-      Object.keys(pa).forEach(function (sg) { var o = pa[sg]; paidR.push([G.u.name, nameOf(G.x), MODL[G.mod], sg === '1' ? 'You paid' : 'You received', r2(o.per), r2(o.tot), o.last, r2(o.amt), o.n]); });
-      if (full) {
-        var a0 = P.from <= '1970-01-01' ? first + '-01' : P.from, bal = or * bucket(G, a0, endEff).open, rows = det[G.mod], lastCarry = '';
-        if (nz(bal)) rows.push([G.u.name, a0, nameOf(G.x), 'Opening balance (brought forward)', '', '', r2(bal)]);
-        G.ev.forEach(function (e) {
-          if (e.d < a0 || e.d > P.to) return;
-          if (e.d > td) { rows.push([G.u.name, e.d, nameOf(G.x), '(upcoming) ' + e.sub + ' · ' + e.what, r2(or * e.a), '', '']); return; }
-          if (e.kind === 'carry') {
-            if (e.d.slice(0, 7) === a0.slice(0, 7)) return;
-            bal = (lastCarry === e.d ? bal : 0) + or * e.a; lastCarry = e.d;
-            rows.push([G.u.name, e.d, nameOf(G.x), e.what + ' (balance restarts from this amount)', '', '', r2(bal)]); return;
-          }
-          if (e.kind === 'charge') { bal += or * e.a; rows.push([G.u.name, e.d, nameOf(G.x), e.sub + ' · ' + e.what, r2(or * e.a), '', r2(bal)]); }
-          else { bal -= or * e.a; rows.push([G.u.name, e.d, nameOf(G.x), e.sub + ' · ' + e.what, '', r2(or * e.a), r2(bal)]); }
+    /* Squad netting can pair people who never traded directly: make a line for every pair that appears at any month end */
+    var sqD = L.EV.filter(function (e) { return e.mod === 'squad'; }).map(function (e) { return e.d; }).sort();
+    if (sqD.length) {
+      var m0 = sqD[0].slice(0, 7), m1 = endEff.slice(0, 7), mm = m0, guard = 0;
+      while (mm <= m1 && guard++ < 150) {
+        var pr = L.pairAt(monthEnd(mm) < endEff ? monthEnd(mm) : endEff);
+        Object.keys(pr).forEach(function (k) {
+          if (Math.abs(pr[k]) < EPS) return; var p = k.split('|');
+          uk.forEach(function (u) { var x = p[0] === u.k ? p[1] : p[1] === u.k ? p[0] : ''; if (x) { var g = gget(u, x, 'squad'); if (!g.ev.length) g.ev.push({ d: sqD[0], kind: 'charge', a: 0, abs: 0, s: 1, sub: '', what: '' }); } });
         });
+        mm = shiftMonth(mm, 1);
       }
-    });
-    /* totals per person, then per module (a person counts once, on the side of their net balance, so "Total to pay" and the module summary always agree) */
-    gl.forEach(function (G) {
-      var U = per[G.u.k] || (per[G.u.k] = { name: G.u.name, cp: {}, mod: {} });
-      var cp = U.cp[G.x] || (U.cp[G.x] = { squad: 0, bill: 0, plan: 0, own: 0, up: 0 }), col = G.mod === 'squad' ? 'squad' : (G.mod === 'admin' || G.mod === 'party') ? 'bill' : G.mod === 'own' ? 'own' : 'plan';
-      cp[col] += G.now.close; if (G.up > EPS) cp.up += G.up;
-    });
-    var sumR = [], payR = [], recR = [], mods = []; if (R.mods.squad) mods.push('squad'); if (R.mods.bill) mods.push('admin', 'party'); if (R.mods.plan) mods.push('plan', 'own');
-    uk.forEach(function (u) {
-      var U = per[u.k] || { name: u.name, cp: {}, mod: {} }, M = {}; mods.forEach(function (m) { M[m] = { pay: 0, rec: 0, paid: 0, rcvd: 0, up: 0 }; });
-      var netOf = function (x) { var c = U.cp[x]; return c.squad + c.bill + c.plan + c.own; };
-      gl.forEach(function (G) {
-        if (G.u.k !== u.k || !M[G.mod]) return; var net = netOf(G.x), m = M[G.mod];
-        if (net > EPS) m.pay += G.now.close; else if (net < -EPS) m.rec += -G.now.close;
-        if (G.up > EPS) m.up += G.up;
-        Object.keys(G.paid).forEach(function (sg) { if (sg === '1') m.paid += G.paid[sg].per; else m.rcvd += G.paid[sg].per; });
-      });
-      var all = { pay: 0, rec: 0, paid: 0, rcvd: 0, up: 0 };
-      mods.forEach(function (m) { var o = M[m]; sumR.push([u.name, MODL[m], r2(o.pay), r2(o.rec), r2(o.paid), r2(o.rcvd), r2(o.up)]); Object.keys(all).forEach(function (k) { all[k] += o[k]; }); });
-      sumR.push([u.name, '▶ ALL MODULES', r2(all.pay), r2(all.rec), r2(all.paid), r2(all.rcvd), r2(all.up)]);
-      Object.keys(U.cp).forEach(function (x) {
-        var c = U.cp[x], net = netOf(x);
-        if (net > EPS || (c.up > EPS && net > -EPS)) payR.push([u.name, nameOf(x), r2(net), r2(c.squad), r2(c.bill), r2(c.plan), r2(c.own), r2(c.up)]);
-        else if (net < -EPS) recR.push([u.name, nameOf(x), r2(-net), r2(-c.squad), r2(-c.bill), r2(-c.plan), r2(-c.own)]);
-      });
-    });
-    payR.sort(function (p, q) { return p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : q[2] - p[2]; }); recR.sort(function (p, q) { return p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : q[2] - p[2]; });
-    paidR.sort(function (p, q) { return p[0] < q[0] ? -1 : p[0] > q[0] ? 1 : (p[6] < q[6] ? 1 : -1); });
-    var T = [], showMods = { squad: R.mods.squad, bill: R.mods.bill, plan: R.mods.plan };
-    T.push(tbl(many, 'Summary', 'Summary — what you pay and what you receive, by module', ['Module', 'You pay (balance)', 'You receive (balance)', 'You paid in period', 'You received in period', 'Upcoming (due later)'], sumR, [1, 2, 3, 4, 5], []));
-    T.push(tbl(many, 'Total to pay', 'TOTAL TO PAY — who you pay (one line per person, all modules together; a − inside a column means that part is owed to you)', ['Pay to', 'TOTAL TO PAY', 'Squad Split', 'Bill Tracker', 'EPP & Gold', 'Own plans', 'Upcoming (due later)'], payR, [1, 2, 3, 4, 5, 6], [1, 2, 3, 4, 5, 6]));
-    T.push(tbl(many, 'Owed to you', 'OWED TO YOU — who needs to pay you (a − inside a column means that part is owed by you)', ['Receive from', 'TOTAL OWED TO YOU', 'Squad Split', 'Bill Tracker', 'EPP & Gold', 'Own plans'], recR, [1, 2, 3, 4, 5], [1, 2, 3, 4, 5]));
-    T.push(tbl(many, 'Paid so far', 'Paid so far — to whom, how much and when', ['With', 'Module', 'Direction', 'Paid in period', 'Paid to date (all time)', 'Last payment on', 'Last amount', 'Payments in period'], paidR, [3, 4, 6], [3, 4]));
-    T.push(tbl(many, 'Balance history', 'Balance history by month — opening + new charges − paid = closing', ['Month', 'With', 'Module', 'Direction', 'Opening (brought forward)', 'New charges', 'Paid / settled', 'Closing balance'], hist, [4, 5, 6, 7], []));
-    if (full) {
-      var dh = ['Date', 'With', 'Detail', 'Charge', 'Paid', 'Balance'], dn = { squad: 'Squad Split — every share, carried-forward balance and settlement', admin: 'Bill Tracker — amounts owed to admin and payments to admin', party: 'Bill Tracker — party ledger entries', plan: 'EPP & Gold plans — instalments due and paid', own: 'EPP & Gold — own plans (instalments to your card / bank)' }, ds = { squad: 'Squad details', admin: 'Admin details', party: 'Party details', plan: 'Plan details', own: 'Own plan details' };
-      mods.forEach(function (m) { T.push(tbl(many, ds[m], dn[m], dh, det[m], [3, 4, 5], [3, 4])); });
     }
-    return { T: T, hasAny: gl.length > 0 };
+    var gl = Object.keys(groups).map(function (k) { return groups[k]; });
+    var sqVal = function (G, date) { var p = L.pairAt(date); return (p[G.u.k + '|' + G.x] || 0) - (p[G.x + '|' + G.u.k] || 0); };
+    function bucket2(G, a, b) {
+      var i, e, open = 0, ch = 0, pd = 0;
+      if (G.mod === 'squad') {
+        open = sqVal(G, addDays(a, -1)); var close = sqVal(G, b);
+        G.ev.forEach(function (e2) { if (e2.kind === 'paid' && e2.d >= a && e2.d <= b) pd += e2.a; });
+        return { open: open, ch: close - open + pd, pd: pd, close: close };
+      }
+      for (i = 0; i < G.ev.length; i++) { e = G.ev[i]; if (e.d < a) { open += e.kind === 'paid' ? -e.a : e.a; continue; } if (e.d > b) continue; if (e.kind === 'paid') pd += e.a; else ch += e.a; }
+      return { open: open, ch: ch, pd: pd, close: open + ch - pd };
+    }
+    var per = {};
+    gl.forEach(function (G) {
+      G.ev.sort(function (p, q) { return p.d < q.d ? -1 : p.d > q.d ? 1 : 0; });
+      var first = G.ev[0].d.slice(0, 7), startM = P.from <= '1970-01-01' ? first : P.from.slice(0, 7), endM = endEff.slice(0, 7), months = [], m = startM;
+      while (m <= endM && months.length < 150) { months.push(m); m = shiftMonth(m, 1); }
+      G.trail = months.map(function (mo) { var a = P.from > mo + '-01' ? P.from : mo + '-01', b = endEff < monthEnd(mo) ? endEff : monthEnd(mo), k = bucket2(G, a, b); k.m = mo; return k; });
+      G.now = G.trail.length ? G.trail[G.trail.length - 1] : { open: 0, ch: 0, pd: 0, close: 0 };
+      G.a0 = P.from <= '1970-01-01' ? first + '-01' : P.from;
+      G.open0 = bucket2(G, G.a0, endEff).open;
+      G.up = G.ev.filter(function (e) { return e.kind === 'charge' && e.d > td && e.d <= P.to; }).reduce(function (s, e) { return s + e.a; }, 0);
+      var U = per[G.u.k] || (per[G.u.k] = { u: G.u, x: {} }), X = U.x[G.x] || (U.x[G.x] = { g: [], tot: 0, up: 0 }); X.g.push(G); X.tot += G.now.close; if (G.up > EPS) X.up += G.up;
+    });
+    var T = [], hasAny = false;
+    uk.forEach(function (u) {
+      var U = per[u.k]; if (!U) return; hasAny = true;
+      var nm = u.name, tag = many ? nm + ' — ' : '', sheet = ('Statement ' + nm).slice(0, 31);
+      var xs = Object.keys(U.x), pay = xs.filter(function (x) { return U.x[x].tot > EPS || (U.x[x].up > EPS && U.x[x].tot > -EPS); }), rec = xs.filter(function (x) { return U.x[x].tot < -EPS; });
+      pay.sort(function (p, q) { return U.x[q].tot - U.x[p].tot; }); rec.sort(function (p, q) { return U.x[p].tot - U.x[q].tot; });
+      var modsUsed = []; Object.keys(ORD).sort(function (p, q) { return ORD[p] - ORD[q]; }).forEach(function (md) { if (gl.some(function (G) { return G.u.k === u.k && G.mod === md && nz(G.now.close); }) || gl.some(function (G) { return G.u.k === u.k && G.mod === md && G.up > EPS; })) modsUsed.push(md); });
+      var cell = function (x, md, sign) { var v = 0; U.x[x].g.forEach(function (G) { if (G.mod === md) v += G.now.close; }); return r2(sign * v); };
+      /* 1. who-pays-whom matrix */
+      if (pay.length) {
+        var head = ['Module'].concat(pay.map(function (x) { return 'To pay ' + nameOf(x); }), ['TOTAL TO PAY', 'Upcoming (due later)']), rows = [];
+        modsUsed.forEach(function (md) { var row = [MODL[md]], t = 0, up = 0; pay.forEach(function (x) { var v = cell(x, md, 1); row.push(v); t += v; U.x[x].g.forEach(function (G) { if (G.mod === md && G.up > EPS) up += G.up; }); }); row.push(r2(t), r2(up)); if (row.slice(1).some(nz)) rows.push(row); });
+        var tot = ['TOTAL'], gt = 0, gu = 0; pay.forEach(function (x) { tot.push(r2(U.x[x].tot)); gt += U.x[x].tot; gu += U.x[x].up; }); tot.push(r2(gt), r2(gu));
+        T.push(mk(sheet, tag + 'WHO YOU PAY — one column per person, one row per module (a − means that person owes you that part)', head, rows, head.map(function (h, i) { return i; }).slice(1), tot));
+      }
+      if (rec.length) {
+        var head2 = ['Module'].concat(rec.map(function (x) { return 'From ' + nameOf(x); }), ['TOTAL OWED TO YOU']), rows2 = [];
+        modsUsed.forEach(function (md) { var row = [MODL[md]], t = 0; rec.forEach(function (x) { var v = cell(x, md, -1); row.push(v); t += v; }); row.push(r2(t)); if (row.slice(1).some(nz)) rows2.push(row); });
+        var tot2 = ['TOTAL'], g2 = 0; rec.forEach(function (x) { tot2.push(r2(-U.x[x].tot)); g2 += -U.x[x].tot; }); tot2.push(r2(g2));
+        T.push(mk(sheet, tag + 'WHO PAYS YOU — one column per person (a − means you owe that person that part)', head2, rows2, head2.map(function (h, i) { return i; }).slice(1), tot2));
+      }
+      /* 2. paid so far */
+      var paidR = [];
+      gl.forEach(function (G) {
+        if (G.u.k !== u.k) return; var pa = {};
+        G.ev.forEach(function (e) {
+          if (e.kind !== 'paid' || e.d > td) return; var o = pa[e.s] || (pa[e.s] = { per: 0, tot: 0, n: 0, last: '', amt: 0 }); o.tot += e.abs;
+          if (e.d >= P.from && e.d <= endEff) { o.per += e.abs; o.n++; } if (e.d >= o.last) { o.last = e.d; o.amt = e.abs; }
+        });
+        Object.keys(pa).forEach(function (sg) { var o = pa[sg]; paidR.push([sg === '1' ? 'You paid ' + nameOf(G.x) : nameOf(G.x) + ' paid you', MODL[G.mod], r2(o.per), r2(o.tot), o.last, r2(o.amt), o.n]); });
+      });
+      paidR.sort(function (p, q) { return p[4] < q[4] ? 1 : p[4] > q[4] ? -1 : 0; });
+      var ptot = ['TOTAL', '', 0, 0, '', '', '']; paidR.forEach(function (r) { ptot[2] += r[2]; ptot[3] += r[3]; }); ptot[2] = r2(ptot[2]); ptot[3] = r2(ptot[3]);
+      T.push(mk(sheet, tag + 'PAID SO FAR — who was paid, how much and when (latest first)', ['Payment', 'Module', 'Paid in period', 'Paid to date (all time)', 'Last payment on', 'Last amount', 'Payments in period'], paidR, [2, 3, 5], paidR.length ? ptot : null));
+      /* 3. one block per person: months newest first, ends with that person's total */
+      var blockOrder = rec.concat(pay.slice().reverse());
+      xs.forEach(function (x) { if (blockOrder.indexOf(x) < 0 && U.x[x].g.some(function (G) { return G.trail.some(function (k) { return nz(k.ch) || nz(k.pd); }); })) blockOrder.unshift(x); });
+      blockOrder.forEach(function (x) {
+        var X = U.x[x], tt = r2(X.tot), rows = [], sg = tt < -EPS ? -1 : 1, who = sg > 0 ? 'what ' + nm + ' owes ' + nameOf(x) : 'what ' + nameOf(x) + ' owes ' + nm;
+        X.g.forEach(function (G) { G.trail.forEach(function (k) { if (nz(k.open) || nz(k.ch) || nz(k.pd) || nz(k.close)) rows.push({ m: k.m, md: G.mod, r: [monthLabel(k.m), MODL[G.mod], r2(sg * k.open), r2(sg * k.ch), r2(sg * k.pd), r2(sg * k.close)] }); }); });
+        rows.sort(function (p, q) { return p.m < q.m ? 1 : p.m > q.m ? -1 : ORD[p.md] - ORD[q.md]; });
+        var lbl = tt > EPS ? nm.toUpperCase() + ' NEEDS TO PAY ' + nameOf(x).toUpperCase() + ' — TOTAL' : tt < -EPS ? nameOf(x).toUpperCase() + ' NEEDS TO PAY ' + nm.toUpperCase() + ' — TOTAL' : nm.toUpperCase() + ' & ' + nameOf(x).toUpperCase() + ' — ALL SETTLED';
+        T.push(mk(sheet, (many ? nm + ': ' : '') + nm + ' ⇄ ' + nameOf(x) + ' — month by month, newest first · amounts = ' + who + ' (opening + new charges − paid = closing)', ['Month', 'Module', 'Opening (brought forward)', 'New charges', 'Paid / settled', 'Closing balance'], rows.map(function (o) { return o.r; }), [2, 3, 4, 5], [lbl, '', '', '', '', Math.abs(tt)]));
+        if (full) {
+          var ev = [], open = 0;
+          X.g.forEach(function (G) {
+            open += sg * G.open0; var pw = 0;
+            G.ev.forEach(function (e) {
+              if (!e.abs || e.d < G.a0 || e.d > P.to) return;
+              if (e.d > td) { ev.push({ d: e.d, up: 1, r: [e.d, MODL[G.mod], '(upcoming) ' + e.sub + ' · ' + e.what, r2(sg * e.a), '', ''] }); return; }
+              var sgn = sg * (e.kind === 'paid' ? -e.a : e.a); pw += sgn * sg;
+              ev.push({ d: e.d, v: sgn, r: [e.d, MODL[G.mod], e.sub + ' · ' + e.what + (e.kind === 'carry' ? ' (balance carried in)' : ''), e.kind === 'paid' ? '' : r2(sg * e.a), e.kind === 'paid' ? r2(sg * e.a) : '', 0] });
+            });
+            if (G.mod === 'squad') { var adj = (G.now.close - G.open0) - pw; if (nz(adj)) ev.push({ d: endEff, v: sg * adj, r: [endEff, MODL.squad, 'Squad netting — the Squad page settles every member against the whole group, not person by person (Squad → Settle)', r2(sg * adj), '', 0] }); }
+          });
+          ev.sort(function (p, q) { return p.d < q.d ? -1 : p.d > q.d ? 1 : 0; });
+          var bal = open, drows = [];
+          if (nz(open)) drows.push({ d: '', r: ['', '', 'Opening balance (brought forward)', '', '', r2(open)] });
+          ev.forEach(function (o) { if (!o.up) { bal += o.v; o.r[5] = r2(bal); } else o.r[5] = ''; drows.push(o); });
+          drows.reverse();
+          T.push(mk(sheet, (many ? nm + ': ' : '') + nm + ' ⇄ ' + nameOf(x) + ' — every entry, newest first · amounts = ' + who + ' (Balance = running total up to that line)', ['Date', 'Module', 'Detail', 'Charge', 'Paid', 'Balance'], drows.map(function (o) { return o.r; }), [3, 4, 5], null));
+        }
+      });
+      /* 4. grand total — the LAST table of every person */
+      var gr = [], gsum = 0;
+      pay.slice().reverse().forEach(function (x) { gr.push([nm + ' needs to pay ' + nameOf(x), r2(U.x[x].tot)]); gsum += U.x[x].tot; });
+      var bold = [];
+      if (pay.length && (pay.length > 1 || rec.length)) { gr.push([nm + ' needs to pay — TOTAL', r2(gsum)]); bold.push(gr.length - 1); }
+      rec.forEach(function (x) { gr.push([nameOf(x) + ' needs to pay ' + nm, r2(-U.x[x].tot)]); gsum += U.x[x].tot; });
+      var fin = gsum > EPS ? nm.toUpperCase() + ' NEEDS TO PAY IN TOTAL' : gsum < -EPS ? 'OTHERS NEED TO PAY ' + nm.toUpperCase() + ' IN TOTAL' : 'ALL SETTLED';
+      T.push(mk(sheet, tag + 'GRAND TOTAL', ['Summary', 'Amount (AED)'], gr, [1], [fin + (rec.length && pay.length ? ' (after what others owe you)' : ''), r2(Math.abs(gsum))], bold));
+    });
+    return { T: T, hasAny: hasAny };
   }
 
 
@@ -404,7 +436,7 @@
     var pays = await byIds(s, 'bill_plan_payments', 'plan_id', plans.map(function (x) { return x.id; }));
     var keep = plans.filter(function (pl) { return ((!pl.start_date || pl.start_date <= P.to) && (!pl.end_date || pl.end_date >= P.from)) || pays.some(function (x) { return x.plan_id === pl.id && inR(x.due_date); }); });
     var T = [], monthly = {}, nm = {}; keep.forEach(function (x) { nm[x.id] = x; });
-    var inst = pays.filter(function (x) { return nm[x.plan_id] && inR(x.due_date); }).sort(function (a, b) { return a.due_date < b.due_date ? -1 : 1; });
+    var inst = pays.filter(function (x) { return nm[x.plan_id] && inR(x.due_date); }).sort(function (a, b) { return a.due_date < b.due_date ? 1 : -1; });
     inst.forEach(function (x) { sumBy(monthly, String(x.due_date).slice(0, 7), Number(x.amount) || 0); });
     if (R.xs.pl_a) T.push(tbl(many, 'Plans', 'EPP & Gold plans', ['Type', 'Plan', 'Event', 'Total', 'Instalments', 'Paid', 'Left to pay', 'Start', 'End', 'Status'], keep.map(function (pl) { var ps = pays.filter(function (x) { return x.plan_id === pl.id; }), paid = ps.filter(function (x) { return x.status === 'paid'; }), left = ps.filter(function (x) { return x.status !== 'paid'; }).reduce(function (a, x) { return a + (Number(x.amount) || 0); }, 0); return [pl.__o, pl.plan_type || '', pl.title || '', pl.event_name || '', Number(pl.total_amount) || 0, pl.installments || ps.length, paid.length, left, pl.start_date || '', pl.end_date || '', effOf('plan', pl, ps.length > 0 && paid.length === ps.length)]; }), [3, 6], [3, 6]));
     if (R.xs.pl_b) T.push(tbl(many, 'Instalments', 'Instalments due in the period', ['Plan', '#', 'Due', 'Amount', 'Status', 'Paid on'], inst.map(function (x) { var pl = nm[x.plan_id]; return [pl.__o, pl.title || '', x.seq, x.due_date, Number(x.amount) || 0, x.status || '', x.paid_at ? String(x.paid_at).slice(0, 10) : '']; }), [3], [3]));
@@ -417,7 +449,7 @@
     await Promise.all(users.map(async function (u) {
       var em = like(u.email), r = await Promise.all([fetchAll(s, 'bill_expenses', function (q) { return q.ilike('user_email', em); }), fetchAll(s, 'bill_cards', function (q) { return q.ilike('user_email', em); })]), cn = {};
       r[1].forEach(function (c) { cn[c.id] = c.card_name; });
-      var list = r[0].filter(function (x) { return inR(x.date); }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+      var list = r[0].filter(function (x) { return inR(x.date); }).sort(function (a, b) { return a.date < b.date ? 1 : -1; });
       agg.push([u.name, list.length, list.reduce(function (a, x) { return a + (Number(x.amount) || 0); }, 0)]);
       list.forEach(function (x) { rows.push([u.name, x.date, x.description || '', x.category || '', x.card_id ? (cn[x.card_id] || '—') : 'Cash / none', Number(x.amount) || 0]); });
     }));
@@ -452,7 +484,7 @@
     });
     var T = [tbl(many, 'Card payments', 'Shared card payments — dues per card', ['Card', 'Shared with', 'Dues in period', 'Amount due', 'Paid', 'Unpaid', 'Unpaid overall (due up to today)'], rows, [3, 4, 5, 6], [2, 3, 4, 5, 6])];
     if (full) {
-      var list = pays.filter(function (x) { return inR(dueOf(x)); }).sort(function (a, b) { return dueOf(a) < dueOf(b) ? -1 : 1; });
+      var list = pays.filter(function (x) { return inR(dueOf(x)); }).sort(function (a, b) { return dueOf(a) < dueOf(b) ? 1 : -1; });
       T.push(tbl(many, 'Card payment lines', 'Shared card payments — every due in the period', ['Card', 'Month', 'Due date', 'Amount due', 'Status', 'Paid on'], list.map(function (x) { return [x.__o, (byId[x.card_id] || {}).card_name || '—', x.month || '', x.due_date || '', amt(x), isPaid(x) ? 'paid' : (dueOf(x) < td ? 'overdue' : 'pending'), x.paid_at ? String(x.paid_at).slice(0, 10) : '']; }), [3], [3]));
     }
     return T;
@@ -472,6 +504,7 @@
     if (M.card) T = T.concat(await cardPart(users, P, s, many, full));
     if (M.et) T = T.concat((await etPart(users, P, s, many)).T);
     if (M.bp) T = T.concat((await bpPart(users, P, s, many)).T);
+    var gts = T.filter(function (t) { return /GRAND TOTAL$/.test(t.title); }); if (gts.length) T = T.filter(function (t) { return !/GRAND TOTAL$/.test(t.title); }).concat(gts);   /* the totals are always the LAST thing in the report */
     var names = Object.keys(MODNAME).filter(function (k) { return M[k]; }).map(function (k) { return k === 'et' && R.kind ? KINDLBL[R.kind] : MODNAME[k]; });
     return { title: 'iFiNeX statement' + (full ? ' — full breakdown' : ' — balances'), subtitle: P.label + ' · ' + names.join(' + ') + ' · ' + (many ? users.length + ' users' : users[0].name) + ' · amounts in AED · Pay = you owe them, Receive = they owe you', tables: T, file: 'ifinex-' + (full ? 'breakdown' : 'balances') + '_' + (P.from === '1970-01-01' ? 'all-time' : P.from + '_to_' + P.to) };
   }
@@ -485,7 +518,7 @@
       var cap = t.rows.length > 300, rows = cap ? t.rows.slice(0, 300) : t.rows;
       h += '<div style="font-weight:800;font-size:.78rem;margin:12px 0 4px;">' + esc(t.title) + ' <span style="font-weight:600;color:var(--muted,#9aa3c7);">(' + t.rows.length + ')</span></div><div style="overflow-x:auto;"><table class="rp-t"><tr>' + t.head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '</tr>';
       if (!rows.length) h += '<tr><td colspan="' + t.head.length + '" style="color:var(--muted,#9aa3c7);">Nothing in this period.</td></tr>';
-      rows.forEach(function (r) { h += '<tr>' + r.map(function (v, i) { var n = t.num.indexOf(i) >= 0; return '<td' + (n ? ' style="text-align:right;white-space:nowrap;"' : '') + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>'; });
+      rows.forEach(function (r, ri) { h += '<tr' + (t.bold && t.bold.indexOf(ri) >= 0 ? ' style="font-weight:800;"' : '') + '>' + r.map(function (v, i) { var n = t.num.indexOf(i) >= 0; return '<td' + (n ? ' style="text-align:right;white-space:nowrap;"' : '') + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>'; });
       if (t.total) h += '<tr style="font-weight:800;background:rgba(255,217,61,.14);">' + t.total.map(function (v, i) { var n = t.num.indexOf(i) >= 0; return '<td' + (n ? ' style="text-align:right;white-space:nowrap;"' : '') + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>';
       h += '</table></div>' + (cap ? '<div style="font-size:.66rem;color:var(--muted,#9aa3c7);">First 300 rows shown — the PDF / Excel / CSV contain all ' + t.rows.length + '.</div>' : '');
     });
@@ -495,19 +528,21 @@
   async function needXlsx() { if (!W.XLSX) await loadScript('vendor/xlsx.full.min.js'); if (!W.XLSX) throw new Error('Excel library missing'); }
   async function needPdf() { if (!W.jspdf) await loadScript('vendor/jspdf.umd.min.js'); if (!(W.jspdf && W.jspdf.jsPDF.API.autoTable)) await loadScript('vendor/jspdf.plugin.autotable.min.js'); if (!W.jspdf) throw new Error('PDF library missing'); }
   var saveBlob = function (b, n) { return W.ifxXfer && W.ifxXfer.saveBlob ? W.ifxXfer.saveBlob(b, n) : Promise.reject(new Error('ifinex-tools.js did not load')); };
+  /* the PDF font has no arrows / true minus / triangles: swap them for plain characters */
+  var pdfSafe = function (v) { return typeof v === 'string' ? v.replace(/⇄/g, '&').replace(/→/g, '>').replace(/−/g, '-').replace(/▶/g, '>').replace(/[^\x00-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u20AC]/g, '') : v; };
   async function toPdf(M) {
     await needPdf();
     var wide = M.tables.some(function (t) { return t.head.length > 6; }), doc = new W.jspdf.jsPDF({ orientation: wide ? 'landscape' : 'portrait', unit: 'mm', format: 'a4' });
-    doc.setFontSize(16); doc.text(M.title, 14, 15); doc.setFontSize(9); doc.setTextColor(110); doc.text(doc.splitTextToSize(M.subtitle + '   |   Generated ' + new Date().toLocaleString(), wide ? 265 : 180), 14, 21); doc.setTextColor(0);
+    doc.setFontSize(16); doc.text(pdfSafe(M.title), 14, 15); doc.setFontSize(9); doc.setTextColor(110); doc.text(doc.splitTextToSize(pdfSafe(M.subtitle) + '   |   Generated ' + new Date().toLocaleString(), wide ? 265 : 180), 14, 21); doc.setTextColor(0);
     var y = 30;
     M.tables.forEach(function (t) {
       var H = doc.internal.pageSize.getHeight(); if (y > H - 40) { doc.addPage(); y = 16; }
-      doc.setFontSize(11); doc.text(t.title, 14, y);
-      var body = t.rows.map(function (r) { return r.map(function (v, i) { return cellStr(v, t.num.indexOf(i) >= 0); }); }); if (t.total) body.push(t.total.map(function (v, i) { return cellStr(v, t.num.indexOf(i) >= 0); }));
+      doc.setFontSize(10.5); doc.setFont('helvetica', 'bold'); var tl = doc.splitTextToSize(pdfSafe(t.title), wide ? 265 : 180); doc.text(tl, 14, y); doc.setFont('helvetica', 'normal'); y += (tl.length - 1) * 4.5;
+      var body = t.rows.map(function (r) { return r.map(function (v, i) { return pdfSafe(cellStr(v, t.num.indexOf(i) >= 0)); }); }); if (t.total) body.push(t.total.map(function (v, i) { return pdfSafe(cellStr(v, t.num.indexOf(i) >= 0)); }));
       if (!t.rows.length) body = [[{ content: 'Nothing in this period.', colSpan: t.head.length }]];
       var right = {}; t.num.forEach(function (i) { right[i] = { halign: 'right' }; });
-      doc.autoTable({ startY: y + 3, head: [t.head], body: body, styles: { fontSize: 8, cellPadding: 1.5 }, headStyles: { fillColor: [77, 150, 255] }, alternateRowStyles: { fillColor: [244, 247, 255] }, columnStyles: right,
-        didParseCell: function (d) { if (t.total && t.rows.length && d.section === 'body' && d.row.index === body.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [255, 244, 200]; } } });
+      doc.autoTable({ startY: y + 3, head: [t.head.map(pdfSafe)], body: body, styles: { fontSize: 8, cellPadding: 1.5 }, headStyles: { fillColor: [77, 150, 255] }, alternateRowStyles: { fillColor: [244, 247, 255] }, columnStyles: right,
+        didParseCell: function (d) { if (d.section === 'head' && t.num.indexOf(d.column.index) >= 0) d.cell.styles.halign = 'right'; if (d.section !== 'body') return; if (t.total && t.rows.length && d.row.index === body.length - 1) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [255, 244, 200]; } else if (t.bold && t.bold.indexOf(d.row.index) >= 0) { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [255, 250, 225]; } } });
       y = doc.lastAutoTable.finalY + 9;
     });
     var n = doc.internal.getNumberOfPages(); for (var i = 1; i <= n; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(140); doc.text('iFiNeX · page ' + i + '/' + n, 14, doc.internal.pageSize.getHeight() - 7); }
