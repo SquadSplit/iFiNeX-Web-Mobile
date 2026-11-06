@@ -391,7 +391,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="login-logo">
       <img class="logo-img" src="assets/ifinex-emblem-192.png" alt="" width="104" height="104" style="width:104px;height:104px;border-radius:50%;">
       <img src="assets/ifinex-wordmark.png" alt="iFiNeX" style="width:230px;max-width:72%;display:block;margin:6px auto 0;border-radius:12px;"><h1 style="position:absolute;left:-9999px;">iFiNeX</h1>
-      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v11.0 · app v4.0</small></p>
+      <p>Plan · Track · Save · Grow<br><small style="opacity:.7">web v12.1 · app v5.1</small></p>
     </div>
 
     <div class="error-msg" id="login-error"></div>
@@ -475,7 +475,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <button class="drawer-item" id="btn-update" onclick="closeDrawer();ifxUpdate.open()">⬆️ Check for updates<span id="upd-dot"></span></button>
     <button class="drawer-item" id="btn-open-admin" style="display:none;" onclick="closeDrawer();openAdmin()">⚙️ Admin</button>
     <button class="drawer-item" onclick="closeDrawer();logout()">🚪 Log out</button>
-    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v11.0 · app v4.0</div>
+    <div id="ifx-ver" style="font-size:.64rem;color:var(--muted);text-align:center;padding:10px;">iFiNeX web v12.1 · app v5.1</div>
   </aside>
 
   <!-- HOME -->
@@ -674,6 +674,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
   <!-- CARDS -->
   <div class="page" id="page-cards">
     <div class="section-title">💳 Your cards</div>
+    <button class="btn-add" onclick="ifxReports.open('card')" style="margin:0 0 12px;background:linear-gradient(135deg,#4d96ff,#b06aff);">📊 Card payment reports &amp; downloads (PDF · Excel · CSV)</button>
     <div class="cards-grid" id="cards-grid"></div>
     <div class="card">
       <div class="fg">
@@ -692,6 +693,7 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
   <!-- PARTY (replaces the old separate Owed page — its content now lives in Home's tabs) -->
   <div class="page" id="page-party">
     <div class="section-title">🎉 Your parties</div>
+    <button class="btn-add" onclick="ifxReports.open('bill')" style="margin:0 0 12px;background:linear-gradient(135deg,#4d96ff,#b06aff);">📊 Party ledger &amp; Bill Tracker reports (PDF · Excel · CSV)</button>
     <p style="font-size:.72rem;color:var(--muted);margin-top:-8px;margin-bottom:14px;">People or businesses you might owe money to — add them here once, then pick them any time from ➕ Add → Party Ledger.</p>
     <div class="cards-grid" id="party-grid"></div>
     <div class="card">
@@ -721,7 +723,8 @@ html{max-width:100%;overflow-x:hidden;}body{max-width:100%;overflow-x:visible;}
     <div class="chip-row" id="plan-event-chips"></div>
     <div class="chip-row" id="plan-ledger-chips"></div>
     <div class="plan-stats" id="plan-summary"></div>
-    <button class="btn-add" onclick="openPlanModal()" style="margin-bottom:14px;">➕ New plan</button>
+    <button class="btn-add" onclick="openPlanModal()" style="margin-bottom:8px;">➕ New plan</button>
+    <button class="btn-add" onclick="ifxReports.open('plan')" style="margin-bottom:14px;background:linear-gradient(135deg,#4d96ff,#b06aff);">📊 Plan reports &amp; downloads (PDF · Excel · CSV)</button>
     <div id="plan-list"></div>
   </div>
 
@@ -1604,7 +1607,7 @@ const HUB_TILES=[
  ['Event Expense Tracker','event','#FF6B6B','🎟️','Weddings, parties, occasions',()=>{etTab='occasion';switchPage('et');}],
  ['Trip Expense Tracker','trip','#4DD0E1','✈️','Travel costs, shared trips',()=>{etTab='trip';switchPage('et');}],
  ['EPP & Gold Plans','bill','#B06AFF','📅','Installments & schedules',()=>switchPage('plans')],
- ['Reports & Downloads','budget','#FF9D4D','📊','All modules · month · PDF · Excel · CSV',()=>{ if(window.ifxReports) ifxReports.open('all'); else toast('Reports are still loading — try again'); }]
+ ['Reports & Downloads','budget','#FF9D4D','📊','Everything · weekly / monthly / custom · who pays whom · PDF · Excel · CSV',()=>{ if(window.ifxReports) ifxReports.open('all'); else toast('Reports are still loading — try again'); }]
 ];
 function renderHub(){
   const g=document.getElementById('hub-grid'); if(!g) return;
@@ -3440,6 +3443,7 @@ function etList(r){
   r.innerHTML=`<div class="section-title">🧾 Expense Tracker</div>
   ${etTabsHtml()}
   <div style="display:flex;gap:8px;margin-bottom:14px;"><button class="btn-add" style="margin:0;flex:1;" onclick="openEtModal()">➕ New ${etNewLabel()}</button>${ifxXfer.button('et_trackers','Import / Export')}</div>
+  <button class="btn-add" style="margin:0 0 14px;background:linear-gradient(135deg,#4d96ff,#b06aff);" onclick="ifxReports.open('et',{kind:etTab})">📊 ${etTab==='trip'?'Trip':etTab==='occasion'?'Event':'Expense'} tracker reports &amp; downloads (PDF · Excel · CSV)</button>
   ${list.length?list.map(t=>{const es=etEntries.filter(e=>e.tracker_id===t.id),tot=es.reduce((a,e)=>a+Number(e.amount),0);return `<div class="et-card" data-ifx-card data-ifx-k="t${esc(t.id)}" data-ifx-amt="${esc(tot)}" data-ifx-cur="${esc(t.currency)}" data-ifx-label="${esc(t.title)}" data-ifx-date="${esc(t.start_date)}" onclick="etOpenT(${esc(t.id)})"><div style="display:flex;justify-content:space-between;gap:8px;"><b>${ETK_ICON[t.kind]||'📆'} ${escapeHtml(t.title)}</b><span class="et-total">${esc(etMoney(tot,t.currency))}</span></div><div style="font-size:.7rem;color:var(--muted);margin-top:4px;">${esc(t.start_date)} → ${esc(t.end_date)} · ${esc(es.length)} entries${(t.participants||[]).length?esc(' · 👥 '+((t.participants||[]).length+1)):' · solo'}</div></div>`;}).join(''):'<p style="text-align:center;color:var(--muted);">Nothing here yet.</p>'}`;
 }
 function etOpenT(id){etOpen=id;etF={cat:'all',from:'',to:''};renderEt();window.scrollTo(0,0);}
@@ -3451,7 +3455,7 @@ function etDetail(r,t){
   r.innerHTML=`<button class="chip" onclick="etOpen=null;renderEt()">‹ Back</button>
   <div class="et-card" style="cursor:default;margin-top:10px;"><b>${escapeHtml(t.title)}</b><div style="font-size:.7rem;color:var(--muted);">${esc(t.start_date)} → ${esc(t.end_date)} · ${esc(t.currency)}</div>
   <div class="et-total">${esc(etMoney(es.length===all.length?grand:tot,t.currency))}</div><div style="font-size:.7rem;color:var(--muted);">${etF.cat==='all'&&!etF.from&&!etF.to?'Total spent':'Filtered total'} · overall ${esc(etMoney(grand,t.currency))}</div>
-  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"><button class="btn-tiny" onclick="exportEt('pdf')">📄 PDF</button><button class="btn-tiny" onclick="exportEt('xlsx')">📊 Excel</button>${ifxXfer.button('et_entries','Import entries')}<button class="btn-tiny" onclick="etEditTracker(${esc(t.id)})">✏️ Edit</button><button class="btn-tiny ghost" onclick="deleteEt(${esc(t.id)})">🗑️ Delete</button></div></div>
+  <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;"><button class="btn-tiny" onclick="exportEt('pdf')">📄 PDF</button><button class="btn-tiny" onclick="exportEt('xlsx')">📊 Excel</button><button class="btn-tiny" onclick="ifxReports.open('et',{kind:'${esc(t.kind)}',tracker:${esc(t.id)}})">🧾 Statement</button>${ifxXfer.button('et_entries','Import entries')}<button class="btn-tiny" onclick="etEditTracker(${esc(t.id)})">✏️ Edit</button><button class="btn-tiny ghost" onclick="deleteEt(${esc(t.id)})">🗑️ Delete</button></div></div>
   <div class="card"><div class="section-title" style="font-size:1rem;">➕ Add expense</div>
   <div class="et-grid fg-inline"><select id="ete-cat">${etAllCats().map(c=>`<option>${escapeHtml(c[0])}</option>`).join('')}</select><input id="ete-amt" type="number" step="0.01" placeholder="Amount (${esc(t.currency)})"><input id="ete-date" type="date" min="${esc(t.start_date)}" max="${esc(t.end_date)}" value="${esc(dflt)}"><input id="ete-note" placeholder="Note (optional)"></div>
   ${people.length>1?`<div class="fg-inline" style="margin-top:8px;"><select id="ete-by">${people.map(e=>`<option value="${escapeHtml(e)}" ${e.toLowerCase()===me.email.toLowerCase()?'selected':''}>Spent by ${escapeHtml(etName(e))}</option>`).join('')}</select></div>`:''}
