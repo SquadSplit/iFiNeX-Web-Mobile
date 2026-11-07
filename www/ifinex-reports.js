@@ -46,7 +46,7 @@
   var R = null, MODEL = null, busy = false;
   function fresh() {
     var ym = today().slice(0, 7);
-    return { dur: 'month', month: ym, wkDate: today(), from: ym + '-01', to: today(), mode: 'bal', scope: 'me', picked: {}, mods: { squad: true, bill: true, plan: true, card: false, et: false, bp: false }, kind: '', events: {}, trackers: [], users: [], group: 'combined', xs: {} };
+    return { dur: 'month', month: ym, wkDate: today(), from: ym + '-01', to: today(), mode: 'bal', showBal: true, showFull: false, withAll: true, withPick: {}, dirRecv: true, dirPay: true, scope: 'me', picked: {}, mods: { squad: true, bill: true, plan: true, card: false, et: false, bp: false }, kind: '', events: {}, trackers: [], users: [], group: 'combined', xs: {} };
   }
 
   /* ---------- people ---------- */
@@ -263,7 +263,8 @@
 
   /* v12.2 — who-pays-whom statement.  Squad Split uses the SAME netting as the Squad page (all expenses + carried balances − settlements, then "simplify");
      every other module is a running ledger.  Output per person: matrix "To pay <name>" · paid so far · one block per person (months newest first) · grand total LAST. */
-  function ledgerTables(users, L, P, many, full) {
+  function ledgerTables(users, L, P, many, full, opt) {
+    opt = opt || { bal: true, withKeys: [], recv: true, pay: true };
     var td = today(), endEff = P.to < td ? P.to : td, nameOf = L.nameOf, uk = users.map(function (u) { return { k: lower(u.email), name: u.name }; }), groups = {};
     var ORD = { squad: 0, admin: 1, party: 2, plan: 3, own: 4 };
     var mk = function (sheet, title, head, rows, num, total, bold) { return { sheet: sheet, title: title, head: head, rows: rows, total: total || null, num: num, bold: bold || [] }; };
@@ -315,7 +316,11 @@
     uk.forEach(function (u) {
       var U = per[u.k]; if (!U) return; hasAny = true;
       var nm = u.name, tag = many ? nm + ' — ' : '', sheet = ('Statement ' + nm).slice(0, 31);
+      Object.keys(U.x).forEach(function (x) { if (opt.withKeys.length && opt.withKeys.indexOf(x) < 0) delete U.x[x]; });
+      if (!Object.keys(U.x).length) return;   /* nobody left after the "with whom" choice */
       var xs = Object.keys(U.x), pay = xs.filter(function (x) { return U.x[x].tot > EPS || (U.x[x].up > EPS && U.x[x].tot > -EPS); }), rec = xs.filter(function (x) { return U.x[x].tot < -EPS; });
+      if (!opt.pay) pay = []; if (!opt.recv) rec = [];
+      xs = xs.filter(function (x) { return pay.indexOf(x) >= 0 || rec.indexOf(x) >= 0 || (U.x[x].g.some(function (G) { return G.trail.some(function (k) { return nz(k.ch) || nz(k.pd); }); }) && (Math.abs(U.x[x].tot) < EPS)); });
       pay.sort(function (p, q) { return U.x[q].tot - U.x[p].tot; }); rec.sort(function (p, q) { return U.x[p].tot - U.x[q].tot; });
       var modsUsed = []; Object.keys(ORD).sort(function (p, q) { return ORD[p] - ORD[q]; }).forEach(function (md) { if (gl.some(function (G) { return G.u.k === u.k && G.mod === md && nz(G.now.close); }) || gl.some(function (G) { return G.u.k === u.k && G.mod === md && G.up > EPS; })) modsUsed.push(md); });
       var cell = function (x, md, sign) { var v = 0; U.x[x].g.forEach(function (G) { if (G.mod === md) v += G.now.close; }); return r2(sign * v); };
@@ -349,11 +354,11 @@
       var blockOrder = rec.concat(pay.slice().reverse());
       xs.forEach(function (x) { if (blockOrder.indexOf(x) < 0 && U.x[x].g.some(function (G) { return G.trail.some(function (k) { return nz(k.ch) || nz(k.pd); }); })) blockOrder.unshift(x); });
       blockOrder.forEach(function (x) {
-        var X = U.x[x], tt = r2(X.tot), rows = [], sg = tt < -EPS ? -1 : 1, who = sg > 0 ? 'what ' + nm + ' owes ' + nameOf(x) : 'what ' + nameOf(x) + ' owes ' + nm;
+        if (!blockOrder.length) return; var X = U.x[x], tt = r2(X.tot), rows = [], sg = tt < -EPS ? -1 : 1, who = sg > 0 ? 'what ' + nm + ' owes ' + nameOf(x) : 'what ' + nameOf(x) + ' owes ' + nm;
         X.g.forEach(function (G) { G.trail.forEach(function (k) { if (nz(k.open) || nz(k.ch) || nz(k.pd) || nz(k.close)) rows.push({ m: k.m, md: G.mod, r: [monthLabel(k.m), MODL[G.mod], r2(sg * k.open), r2(sg * k.ch), r2(sg * k.pd), r2(sg * k.close)] }); }); });
         rows.sort(function (p, q) { return p.m < q.m ? 1 : p.m > q.m ? -1 : ORD[p.md] - ORD[q.md]; });
         var lbl = tt > EPS ? nm.toUpperCase() + ' NEEDS TO PAY ' + nameOf(x).toUpperCase() + ' — TOTAL' : tt < -EPS ? nameOf(x).toUpperCase() + ' NEEDS TO PAY ' + nm.toUpperCase() + ' — TOTAL' : nm.toUpperCase() + ' & ' + nameOf(x).toUpperCase() + ' — ALL SETTLED';
-        T.push(mk(sheet, (many ? nm + ': ' : '') + nm + ' ⇄ ' + nameOf(x) + ' — month by month, newest first · amounts = ' + who + ' (opening + new charges − paid = closing)', ['Month', 'Module', 'Opening (brought forward)', 'New charges', 'Paid / settled', 'Closing balance'], rows.map(function (o) { return o.r; }), [2, 3, 4, 5], [lbl, '', '', '', '', Math.abs(tt)]));
+        if (opt.bal) T.push(mk(sheet, (many ? nm + ': ' : '') + nm + ' ⇄ ' + nameOf(x) + ' — month by month, newest first · amounts = ' + who + ' (opening + new charges − paid = closing)', ['Month', 'Module', 'Opening (brought forward)', 'New charges', 'Paid / settled', 'Closing balance'], rows.map(function (o) { return o.r; }), [2, 3, 4, 5], [lbl, '', '', '', '', Math.abs(tt)]));
         if (full) {
           var ev = [], open = 0;
           X.g.forEach(function (G) {
@@ -374,14 +379,19 @@
           T.push(mk(sheet, (many ? nm + ': ' : '') + nm + ' ⇄ ' + nameOf(x) + ' — every entry, newest first · amounts = ' + who + ' (Balance = running total up to that line)', ['Date', 'Module', 'Detail', 'Charge', 'Paid', 'Balance'], drows.map(function (o) { return o.r; }), [3, 4, 5], null));
         }
       });
-      /* 4. grand total — the LAST table of every person */
-      var gr = [], gsum = 0;
-      pay.slice().reverse().forEach(function (x) { gr.push([nm + ' needs to pay ' + nameOf(x), r2(U.x[x].tot)]); gsum += U.x[x].tot; });
-      var bold = [];
-      if (pay.length && (pay.length > 1 || rec.length)) { gr.push([nm + ' needs to pay — TOTAL', r2(gsum)]); bold.push(gr.length - 1); }
-      rec.forEach(function (x) { gr.push([nameOf(x) + ' needs to pay ' + nm, r2(-U.x[x].tot)]); gsum += U.x[x].tot; });
-      var fin = gsum > EPS ? nm.toUpperCase() + ' NEEDS TO PAY IN TOTAL' : gsum < -EPS ? 'OTHERS NEED TO PAY ' + nm.toUpperCase() + ' IN TOTAL' : 'ALL SETTLED';
-      T.push(mk(sheet, tag + 'GRAND TOTAL', ['Summary', 'Amount (AED)'], gr, [1], [fin + (rec.length && pay.length ? ' (after what others owe you)' : ''), r2(Math.abs(gsum))], bold));
+      /* 4. grand total — the LAST table of every person: what others owe you, what you owe, then the net */
+      var gr = [], bold = [], oweMe = 0, iOwe = 0;
+      rec.forEach(function (x) { var v = r2(-U.x[x].tot); gr.push([nameOf(x) + ' needs to pay ' + nm, v]); oweMe += -U.x[x].tot; });
+      if (rec.length && pay.length) { gr.push(['TOTAL OWED TO ' + nm.toUpperCase() + ' (' + rec.length + ' ' + (rec.length > 1 ? 'people' : 'person') + ')', r2(oweMe)]); bold.push(gr.length - 1); }
+      pay.slice().reverse().forEach(function (x) { gr.push([nm + ' needs to pay ' + nameOf(x), r2(U.x[x].tot)]); iOwe += U.x[x].tot; });
+      if (rec.length && pay.length) { gr.push(['TOTAL ' + nm.toUpperCase() + ' OWES (' + pay.length + ' ' + (pay.length > 1 ? 'people' : 'person') + ')', r2(iOwe)]); bold.push(gr.length - 1); }
+      var net = oweMe - iOwe, fin;
+      if (rec.length && pay.length) fin = net >= 0 ? 'NET: OTHERS OWE ' + nm.toUpperCase() + ' (owed to you − you owe)' : 'NET: ' + nm.toUpperCase() + ' OWES OTHERS (you owe − owed to you)';
+      else if (rec.length) fin = 'OTHERS NEED TO PAY ' + nm.toUpperCase() + ' IN TOTAL';
+      else if (pay.length) fin = nm.toUpperCase() + ' NEEDS TO PAY IN TOTAL';
+      else fin = 'ALL SETTLED';
+      if (rec.length && pay.length) { /* the net is the last line */ }
+      T.push(mk(sheet, tag + 'GRAND TOTAL', ['Summary', 'Amount (AED)'], gr, [1], [fin, r2(Math.abs(net))], bold));
     });
     return { T: T, hasAny: hasAny };
   }
@@ -491,11 +501,11 @@
   }
   async function allModel() {
     var s = SB(); if (!s) throw new Error('Reports need the live database (demo mode has no database).');
-    var P = periodOf(R), users = usersOf(), many = users.length > 1, full = R.mode === 'full', T = [], M = R.mods;
+    var P = periodOf(R), users = usersOf(), many = users.length > 1, modeOf = R.showFull ? (R.showBal === false ? 'det' : 'full') : (R.mode === 'full' || R.mode === 'det' ? R.mode : 'bal'), full = modeOf !== 'bal', balOn = modeOf !== 'det', T = [], M = R.mods;
     R.group = full ? 'user' : 'combined'; R.xs = { et_a: true, et_b: full, et_c: full, bp_a: true, bp_b: full, bp_c: full, pl_a: full, pl_b: false };
     var L = null;
     if (M.squad || M.bill || M.plan) {
-      L = await loadEvents(s); var led = ledgerTables(users, L, P, many, full); T = T.concat(led.T);
+      L = await loadEvents(s); var led = ledgerTables(users, L, P, many, full, { bal: balOn, withKeys: R.withAll ? [] : Object.keys(R.withPick).filter(function (k) { return R.withPick[k]; }), recv: R.dirRecv !== false, pay: R.dirPay !== false }); T = T.concat(led.T);
       if (!led.hasAny) T.unshift({ sheet: 'Summary', title: 'Nothing owed between the selected people for the selected modules.', head: ['Info'], rows: [], total: null, num: [] });
     }
     if (M.bill) T = T.concat(await spendPart(users, P, s, many, full));
@@ -512,14 +522,16 @@
 
   /* ============================== RENDER / EXPORT ============================== */
   var cellStr = function (v, isNum) { return v == null ? '' : (isNum && typeof v === 'number') ? money(v) : String(v); };
+  /* a TOTAL row whose label is long spans the empty cells before the first number column */
+  function spanOf(t) { if (!t.total || !t.num.length) return 1; var n = t.num[0]; if (n < 2 || String(t.total[0]).length < 16) return 1; for (var i = 1; i < n; i++) if (t.total[i] !== '' && t.total[i] != null) return 1; return n; }
   function previewHtml(M) {
     var h = '<div style="font-weight:800;font-size:1rem;">' + esc(M.title) + '</div><div style="font-size:.72rem;color:var(--muted,#9aa3c7);margin:2px 0 10px;">' + esc(M.subtitle) + '</div>';
     M.tables.forEach(function (t) {
       var cap = t.rows.length > 300, rows = cap ? t.rows.slice(0, 300) : t.rows;
       h += '<div style="font-weight:800;font-size:.78rem;margin:12px 0 4px;">' + esc(t.title) + ' <span style="font-weight:600;color:var(--muted,#9aa3c7);">(' + t.rows.length + ')</span></div><div style="overflow-x:auto;"><table class="rp-t"><tr>' + t.head.map(function (x) { return '<th>' + esc(x) + '</th>'; }).join('') + '</tr>';
       if (!rows.length) h += '<tr><td colspan="' + t.head.length + '" style="color:var(--muted,#9aa3c7);">Nothing in this period.</td></tr>';
-      rows.forEach(function (r, ri) { h += '<tr' + (t.bold && t.bold.indexOf(ri) >= 0 ? ' style="font-weight:800;"' : '') + '>' + r.map(function (v, i) { var n = t.num.indexOf(i) >= 0; return '<td' + (n ? ' style="text-align:right;white-space:nowrap;"' : '') + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>'; });
-      if (t.total) h += '<tr style="font-weight:800;background:rgba(255,217,61,.14);">' + t.total.map(function (v, i) { var n = t.num.indexOf(i) >= 0; return '<td' + (n ? ' style="text-align:right;white-space:nowrap;"' : '') + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>';
+      rows.forEach(function (r, ri) { h += '<tr' + (t.bold && t.bold.indexOf(ri) >= 0 ? ' style="font-weight:800;"' : '') + '>' + r.map(function (v, i) { var n = t.num.indexOf(i) >= 0; return '<td' + (n ? ' style="text-align:right;white-space:nowrap;"' : (typeof v === 'string' && v.length <= 34 ? ' style="white-space:nowrap;"' : '')) + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>'; });
+      if (t.total) { var sp = spanOf(t); h += '<tr style="font-weight:800;background:rgba(255,217,61,.14);">' + t.total.map(function (v, i) { if (i > 0 && i < sp) return ''; var n = t.num.indexOf(i) >= 0; return '<td' + (i === 0 && sp > 1 ? ' colspan="' + sp + '"' : '') + (n ? ' style="text-align:right;white-space:nowrap;"' : '') + '>' + esc(cellStr(v, n)) + '</td>'; }).join('') + '</tr>'; }
       h += '</table></div>' + (cap ? '<div style="font-size:.66rem;color:var(--muted,#9aa3c7);">First 300 rows shown — the PDF / Excel / CSV contain all ' + t.rows.length + '.</div>' : '');
     });
     return h;
@@ -538,7 +550,7 @@
     M.tables.forEach(function (t) {
       var H = doc.internal.pageSize.getHeight(); if (y > H - 40) { doc.addPage(); y = 16; }
       doc.setFontSize(10.5); doc.setFont('helvetica', 'bold'); var tl = doc.splitTextToSize(pdfSafe(t.title), wide ? 265 : 180); doc.text(tl, 14, y); doc.setFont('helvetica', 'normal'); y += (tl.length - 1) * 4.5;
-      var body = t.rows.map(function (r) { return r.map(function (v, i) { return pdfSafe(cellStr(v, t.num.indexOf(i) >= 0)); }); }); if (t.total) body.push(t.total.map(function (v, i) { return pdfSafe(cellStr(v, t.num.indexOf(i) >= 0)); }));
+      var body = t.rows.map(function (r) { return r.map(function (v, i) { return pdfSafe(cellStr(v, t.num.indexOf(i) >= 0)); }); }); if (t.total) { var sp = spanOf(t), tr = t.total.map(function (v, i) { return pdfSafe(cellStr(v, t.num.indexOf(i) >= 0)); }); if (sp > 1) tr = [{ content: tr[0], colSpan: sp }].concat(tr.slice(sp)); body.push(tr); }
       if (!t.rows.length) body = [[{ content: 'Nothing in this period.', colSpan: t.head.length }]];
       var right = {}; t.num.forEach(function (i) { right[i] = { halign: 'right' }; });
       doc.autoTable({ startY: y + 3, head: [t.head.map(pdfSafe)], body: body, styles: { fontSize: 8, cellPadding: 1.5 }, headStyles: { fillColor: [77, 150, 255] }, alternateRowStyles: { fillColor: [244, 247, 255] }, columnStyles: right,
@@ -604,7 +616,7 @@
   var MODS = [['squad', '👥 Squad Split'], ['bill', '🧾 Bill Tracker'], ['plan', '📅 EPP & Gold plans'], ['card', '💳 Shared card payments'], ['et', '🪙 Expense / Trip / Event trackers'], ['bp', '📈 Budget planner']];
   var ENTRYLBL = { all: 'the iFiNeX Hub (all modules)', bill: 'Bill Tracker', squad: 'Squad Split', plan: 'EPP & Gold plans', card: 'Shared card payments', et: 'the trackers', bp: 'the Budget planner' };
   function paint() {
-    var P = periodOf(R), h = '<button class="x" data-a="close" aria-label="Close">✕</button><h3>📊 Statements & reports</h3><div class="sub">Started from <b>' + esc((R.kind && KINDLBL[R.kind]) || ENTRYLBL[R.entry] || ENTRYLBL.all) + '</b>' + (R.entry === 'all' ? '' : ' — you can still tick other modules below') + '. Four choices, then preview or download. Nothing in your data is changed.</div>';
+    var P = periodOf(R), h = '<button class="x" data-a="close" aria-label="Close">✕</button><h3>📊 Statements & reports</h3><div class="sub">Started from <b>' + esc((R.kind && KINDLBL[R.kind]) || ENTRYLBL[R.entry] || ENTRYLBL.all) + '</b>' + (R.entry === 'all' ? '' : ' — you can still tick other modules below') + '. Five choices, then preview or download. Nothing in your data is changed.</div>';
     h += '<div class="rstep">1 · Duration</div><div class="chips">' + chip('dur', 'week', 'Weekly', R.dur === 'week') + chip('dur', 'month', 'Monthly', R.dur === 'month') + chip('dur', 'all', 'All time', R.dur === 'all') + chip('dur', 'custom', 'Custom dates', R.dur === 'custom') + '</div>';
     if (R.dur === 'week') h += '<div class="row">' + chip('wk', '0', 'This week', mondayOf(R.wkDate) === mondayOf(today())) + chip('wk', '-1', 'Last week', mondayOf(R.wkDate) === mondayOf(addDays(today(), -7))) + '<input type="date" data-f="wkDate" value="' + esc(R.wkDate) + '" aria-label="Any day of the week"></div>';
     if (R.dur === 'month') h += '<div class="row"><button type="button" class="chip" data-a="mprev" aria-label="Previous month">‹</button><input type="month" data-f="month" value="' + esc(R.month) + '" aria-label="Month"><button type="button" class="chip" data-a="mnext" aria-label="Next month">›</button></div>';
@@ -622,7 +634,11 @@
       h += '<div class="rstep">Trackers / events</div><div class="sub">Nothing ticked = every tracker in the period. Tick one or more to report only that trip, event or tracker.</div>';
       h += tl.length ? '<div class="pk">' + tl.map(function (t) { return '<label class="ck"><input type="checkbox" data-e="' + esc(t.id) + '"' + (R.events[t.id] ? ' checked' : '') + '> ' + esc((ico[t.kind] || '🪙') + ' ' + t.title) + '</label>'; }).join('') + '</div>' : '<div class="sub">No trackers found for the selected users.</div>';
     }
-    h += '<div class="rstep">4 · Report type</div><div class="rts"><button type="button" class="rt' + (R.mode === 'bal' ? ' on' : '') + '" data-k="mode" data-v="bal"><b>Balances only</b>Who you pay, how much, and the month-by-month balance: brought forward + new − paid = closing.</button><button type="button" class="rt' + (R.mode === 'full' ? ' on' : '') + '" data-k="mode" data-v="full"><b>Full breakdown</b>Balances plus every expense share, payment, settlement, instalment and spending line.</button></div>';
+    h += '<div class="rstep">4 · With whom (who pays who)</div><div class="sub">The statement is about the account(s) chosen in step 3. Choose which people go into the statement, and which direction.</div>';
+    h += '<div class="chips">' + chip('withAll', '1', 'Everyone', R.withAll) + chip('withAll', '0', 'Choose people…', !R.withAll) + '</div>';
+    if (!R.withAll) h += '<div class="row"><button type="button" class="chip" data-a="allw">Select all</button><button type="button" class="chip" data-a="now">None</button></div><div class="pk">' + R.users.map(function (u) { var e = lower(u.email); return '<label class="ck"><input type="checkbox" data-w="' + esc(e) + '"' + (R.withPick[e] ? ' checked' : '') + '> ' + esc(u.name || u.email) + '</label>'; }).join('') + '</div>';
+    h += '<div class="mods"><label class="ck"><input type="checkbox" data-dir="recv"' + (R.dirRecv !== false ? ' checked' : '') + '> 📥 What they owe the account (money coming in)</label><label class="ck"><input type="checkbox" data-dir="pay"' + (R.dirPay !== false ? ' checked' : '') + '> 📤 What the account owes them (money going out)</label></div>';
+    h += '<div class="rstep">5 · Report type (tick one or both)</div><div class="mods"><label class="ck"><input type="checkbox" data-sh="bal"' + (R.showBal !== false ? ' checked' : '') + '> <b>Balances</b> — who pays whom, per-person month-by-month balance (brought forward + new − paid = closing), totals</label><label class="ck"><input type="checkbox" data-sh="full"' + (R.showFull ? ' checked' : '') + '> <b>Full breakdown</b> — every expense share, payment, settlement, instalment and spending line, newest first</label></div>';
     h += '<div class="acts"><button data-a="prev" ' + (busy ? 'disabled' : '') + '>👁 Preview</button><button data-a="pdf" ' + (busy ? 'disabled' : '') + '>⬇ PDF</button><button data-a="xlsx" ' + (busy ? 'disabled' : '') + '>⬇ Excel</button><button class="g" data-a="csv" ' + (busy ? 'disabled' : '') + '>⬇ CSV</button></div><div class="msg" id="rp-msg" role="status"></div><div id="rp-prev">' + (MODEL ? previewHtml(MODEL) : '') + '</div>';
     var scroll = OV.querySelector('.box') ? OV.querySelector('.box').scrollTop : 0;
     OV.innerHTML = '<div class="box">' + h + '</div>'; var bx = OV.querySelector('.box'); if (bx) bx.scrollTop = scroll;
@@ -632,6 +648,7 @@
     var t = e.target.closest ? e.target.closest('[data-k],[data-a]') : null; if (!t) { if (e.target === OV) close(); return; }
     var a = t.getAttribute('data-a'), k = t.getAttribute('data-k'), v = t.getAttribute('data-v');
     if (k === 'wk') { R.wkDate = addDays(today(), 7 * Number(v)); MODEL = null; return paint(); }
+    if (k === 'withAll') { R.withAll = v === '1'; MODEL = null; return paint(); }
     if (k) { R[k] = v; MODEL = null; return paint(); }
     if (a === 'close') return close();
     if (a === 'mprev' || a === 'mnext') { R.month = shiftMonth(R.month || today().slice(0, 7), a === 'mprev' ? -1 : 1); MODEL = null; return paint(); }
@@ -639,6 +656,8 @@
     if (a === 'allm') { MODS.forEach(function (m) { R.mods[m[0]] = true; }); MODEL = null; return paint(); }
     if (a === 'allu') { R.users.forEach(function (u) { R.picked[lower(u.email)] = true; }); MODEL = null; return paint(); }
     if (a === 'nou') { R.picked = {}; MODEL = null; return paint(); }
+    if (a === 'allw') { R.users.forEach(function (u) { R.withPick[lower(u.email)] = true; }); MODEL = null; return paint(); }
+    if (a === 'now') { R.withPick = {}; MODEL = null; return paint(); }
     if (a === 'prev' || a === 'pdf' || a === 'xlsx' || a === 'csv') return run(a);
   }
   function onChange(e) {
@@ -646,6 +665,9 @@
     if (t.getAttribute('data-f')) { R[t.getAttribute('data-f')] = t.value; if (t.getAttribute('data-f') === 'wkDate' || t.getAttribute('data-f') === 'month') paint(); return; }
     if (t.getAttribute('data-m')) { R.mods[t.getAttribute('data-m')] = t.checked; paint(); return; }
     if (t.getAttribute('data-u') != null) { R.picked[t.getAttribute('data-u')] = t.checked; return; }
+    if (t.getAttribute('data-w') != null) { R.withPick[t.getAttribute('data-w')] = t.checked; return; }
+    if (t.getAttribute('data-dir')) { R[t.getAttribute('data-dir') === 'recv' ? 'dirRecv' : 'dirPay'] = t.checked; return; }
+    if (t.getAttribute('data-sh')) { R[t.getAttribute('data-sh') === 'bal' ? 'showBal' : 'showFull'] = t.checked; if (!R.showBal && !R.showFull) { R[t.getAttribute('data-sh') === 'bal' ? 'showFull' : 'showBal'] = true; } paint(); return; }
     if (t.getAttribute('data-e')) { R.events[t.getAttribute('data-e')] = t.checked; }
   }
   async function build() {
@@ -653,6 +675,8 @@
     if (P.from > P.to) throw new Error('"From" is after "To" — swap the dates.');
     if (!MODS.some(function (m) { return R.mods[m[0]]; })) throw new Error('Tick at least one module.');
     if (R.scope === 'pick' && !R.users.some(function (u) { return R.picked[lower(u.email)]; })) throw new Error('Tick at least one user.');
+    if (!R.withAll && !Object.keys(R.withPick).some(function (k) { return R.withPick[k]; })) throw new Error('Tick at least one person in step 4, or choose Everyone.');
+    if (!R.dirRecv && !R.dirPay) throw new Error('Tick at least one direction in step 4.');
     return allModel();
   }
   async function run(kind) {
