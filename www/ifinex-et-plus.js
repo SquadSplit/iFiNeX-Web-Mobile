@@ -138,14 +138,15 @@
       { k: 'currency', label: 'Currency', val: t.currency, req: true },
       { k: 'start', label: 'Start date', type: 'date', val: t.start_date, req: true }, { k: 'end', label: 'End date', type: 'date', val: t.end_date, req: true },
       { k: 'people', label: 'Spending with (not used for Monthly)', type: 'checks', val: t.participants || [], options: people },
-      { k: 'notes', label: 'Notes', val: t.notes || '' }
+      { k: 'notes', label: 'Notes', val: t.notes || '' },
+      { k: 'catset', label: 'Category set', type: 'select', val: '', options: [['', '— keep this tracker’s current list —']].concat(ET_SET_ORDER.map(function (k) { return [k, ET_SETS[k].icon + ' ' + ET_SETS[k].name]; })), hint: 'Choosing a set REPLACES the list of categories offered for new expenses. Existing entries keep theirs. Use 🏷️ Categories to edit one by one.' }
     ], { sub: dates.length ? es.length + ' entries from ' + dates[0] + ' to ' + dates[dates.length - 1] : '', validate: function (v) {
       if (v.end < v.start) return 'End date must be on or after the start date';
       if (dates.length && (dates[0] < v.start || dates[dates.length - 1] > v.end)) return 'The period must include all entries (' + dates[0] + ' → ' + dates[dates.length - 1] + ')';
       if (/[<>"'&]/.test(v.currency) || v.currency.length > 12) return 'Currency looks invalid';
       return null; } });
     if (!v) return;
-    var r = await sb.from('et_trackers').update({ title: v.title.slice(0, 120), kind: v.kind, currency: v.currency.toUpperCase(), start_date: v.start, end_date: v.end, participants: v.kind === 'period' ? [] : v.people, notes: v.notes.slice(0, 300) }).eq('id', t.id);
+    var r = await sb.from('et_trackers').update(Object.assign({ title: v.title.slice(0, 120), kind: v.kind, currency: v.currency.toUpperCase(), start_date: v.start, end_date: v.end, participants: v.kind === 'period' ? [] : v.people, notes: v.notes.slice(0, 300) }, v.catset ? { categories: etSetCats(v.catset), cat_set: v.catset } : {})).eq('id', t.id);
     if (r.error) return toast('❌ ' + r.error.message);
     if (v.kind !== etTab && etOpen == null) etTab = v.kind; await refresh(); toast('Saved ✓');
   };
@@ -153,7 +154,7 @@
   // ---------- edit an ENTRY ----------
   W.etEditEntry = async function (id) {
     var e = etEntries.find(function (x) { return x.id === id; }); if (!e) return; var t = etTrackers.find(function (x) { return x.id === e.tracker_id; }); if (!t) return;
-    var cats = etAllCats().map(function (c) { return c[0]; }); if (cats.indexOf(e.category) < 0) cats.unshift(e.category);
+    var cats = etCatsOf(t).map(function (c) { return c[0]; }); if (cats.indexOf(e.category) < 0) cats.unshift(e.category);
     var people = [t.user_email].concat(t.participants || []);
     var f = [{ k: 'category', label: 'Category', type: 'select', val: e.category, options: cats.map(function (c) { return [c, etIcon(c) + ' ' + c]; }) },
       { k: 'amount', label: 'Amount (' + t.currency + ')', type: 'number', val: e.amount, req: true },

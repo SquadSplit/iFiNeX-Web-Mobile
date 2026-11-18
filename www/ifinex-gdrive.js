@@ -5,10 +5,12 @@
    • Standalone mode: backup AND restore (full).  Server mode (v8.8): backup AND restore — restore only re-adds MISSING rows through the ifx_restore_rows database function (never overwrites).
    • Needs a Google "TVs and Limited Input devices" OAuth client (id + secret) in ifinex-config.json → "google": {clientId, clientSecret}. Without it the screen explains what is missing. Nothing else in the app changes.
    • The only network addresses used: oauth2.googleapis.com (sign-in) and www.googleapis.com (Drive). Tokens stay on this device. */
+/* v14.0 — STANDALONE: Google sign-in on first run (restore the latest backup or start fresh), a DAILY backup at 12:00 AM (the Android app does it even when closed
+   through the native IfinexBackup job; the web layer writes a snapshot file for it), "Restore latest backup" any time, 14 daily copies are kept. */
 (function (W, D) {
   'use strict';
   var C = W.IFX_CFG || {}, G = C.google || null;
-  var LSK = 'ifx_gd', LAST = 'ifx_gd_last', AUTO = 'ifx_gd_auto';
+  var LSK = 'ifx_gd', LAST = 'ifx_gd_last', AUTO = 'ifx_gd_auto', DAYK = 'ifx_gd_day', HASHK = 'ifx_gd_hash';
   var SCOPE = 'openid email https://www.googleapis.com/auth/drive.appdata';
   var OAUTH = 'https://oauth2.googleapis.com', DRIVE = 'https://www.googleapis.com';
   var MAX_KEEP = 10, MAX_UPLOAD = 4.8 * 1048576;
@@ -56,7 +58,7 @@
   }
   function saveTokens(j, prev) {
     var t = { access: j.access_token, exp: Date.now() + (+j.expires_in || 3000) * 1000 - 60000, refresh: j.refresh_token || (prev && prev.refresh) || '', email: (j.id_token ? emailOf(j.id_token) : '') || (prev && prev.email) || '' };
-    ls(LSK, JSON.stringify(t)); return t;
+    ls(LSK, JSON.stringify(t)); setTimeout(syncNative, 50); return t;
   }
   async function access() {
     var t = tok(); if (!t || !t.refresh) throw new Error('not_connected');
@@ -66,7 +68,7 @@
     return saveTokens(r.json, t).access;
   }
   async function disconnect() {
-    var t = tok(); ls(LSK, null);
+    var t = tok(); ls(LSK, null); ls(DAYK, null); ls(HASHK, null); try { var nb = nat(); if (nb) await nb.configure({ enabled: false }); } catch (e0) { }
     try { if (t && (t.refresh || t.access)) await post(OAUTH + '/revoke', { token: t.refresh || t.access }); } catch (e) { }
   }
 
@@ -101,7 +103,7 @@
     return r.json();
   }
   async function prune(prefix) {
-    try { var fs = await list(prefix), tk = await access(); for (var i = MAX_KEEP; i < fs.length; i++) await fetch(DRIVE + '/drive/v3/files/' + encodeURIComponent(fs[i].id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + tk }, credentials: 'omit' }); } catch (e) { }
+    try { var fs = await list(prefix), tk = await access(); for (var i = (C.mode === 'standalone' ? 14 : MAX_KEEP); i < fs.length; i++) await fetch(DRIVE + '/drive/v3/files/' + encodeURIComponent(fs[i].id), { method: 'DELETE', headers: { Authorization: 'Bearer ' + tk }, credentials: 'omit' }); } catch (e) { }
   }
   async function fetchBackup(id, name) {
     var tk = await access(), buf = await dget('/drive/v3/files/' + encodeURIComponent(id) + '?alt=media', tk, 'buf');
@@ -136,8 +138,114 @@
     var p = provider(); if (!p.ready) throw new Error('not_ready');
     var o = await p.make(), n = p.count(o);
     var f = await upload(fname(p), JSON.stringify(o));
-    ls(LAST, new Date().toISOString()); prune('iFiNeX-' + p.key + '-');
+    ls(LAST, new Date().toISOString()); ls(DAYK, dayKey()); if (C.mode === 'standalone') ls(HASHK, dataHash(o)); prune('iFiNeX-' + p.key + '-');
     return { file: f, records: n };
+  }
+
+  // ================= v14.0 · standalone: daily 12:00 AM backup · restore latest · first-run Google sign-in =================
+  var fnv = function (t) { var h = 2166136261; for (var i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; } return h.toString(16); };
+  function dayKey(d) { d = d || new Date(); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  function dataHash(o) { var t = JSON.stringify([o.tables, o.blobs, o.settings]); return fnv(t) + '-' + t.length; }   // the time stamp inside the backup is left out on purpose
+  function nat() { try { return (W.Capacitor && W.Capacitor.Plugins && W.Capacitor.Plugins.IfinexBackup) || null; } catch (e) { return null; } }
+  var snapHash = '';
+  async function writeSnap() {   // the native midnight job uploads THIS file (the app is closed at midnight, so it cannot read the on-device database itself)
+    var n = nat(); if (!n || C.mode !== 'standalone' || !W.IFX_LOCAL || !(tok() || {}).refresh) return false;
+    try { var o = await W.IFX_LOCAL.exportAll(), h = dataHash(o); if (h === snapHash) return true; await n.writeSnapshot({ data: JSON.stringify(o) }); snapHash = h; return true; } catch (e) { return false; }
+  }
+  var syncing = false;
+  async function syncNative() {
+    var n = nat(); if (!n || C.mode !== 'standalone' || syncing) return; syncing = true;
+    try { var t = tok(); if (t && t.refresh && configured() && ls(AUTO) !== '0') { await n.configure({ enabled: true, clientId: G.clientId, clientSecret: G.clientSecret, refreshToken: t.refresh, email: t.email || '' }); await writeSnap(); } else await n.configure({ enabled: false }); } catch (e) { }
+    syncing = false;
+  }
+  async function nativeStatus() { var n = nat(); if (!n) return null; try { return await n.status(); } catch (e) { return null; } }
+  /* once per calendar day: on the phone the native job does it at about 12:00 AM; this runs the same thing as a catch-up when the app is opened, and as a timer if the app is open at midnight */
+  async function dailyRun() {
+    try {
+      if (C.mode !== 'standalone' || !configured() || ls(AUTO) === '0' || !(tok() || {}).refresh) return;
+      var today = dayKey(), n = nat(), L = W.IFX_LOCAL; if (!L) return;
+      if (n) {
+        var st = await nativeStatus(); await writeSnap();
+        if (st && st.lastDay === today) return;
+        if (n.runNow) await n.runNow(); return;
+      }
+      if (ls(DAYK) === today) return;
+      var c = await L.counts(), cnt = Object.keys(c).reduce(function (t, k) { return t + (c[k] || 0); }, 0); if (cnt < 3) { ls(DAYK, today); return; }
+      var p = provider(), o = await p.make(); if (dataHash(o) === ls(HASHK)) { ls(DAYK, today); return; }
+      await upload(fname(p), JSON.stringify(o)); ls(LAST, new Date().toISOString()); ls(DAYK, today); ls(HASHK, dataHash(o)); prune('iFiNeX-' + p.key + '-');
+    } catch (e) { /* silent: offline or access removed — it is tried again the next time the app opens */ }
+  }
+  var dailyArmed = false;
+  function armMidnight() {
+    var now = new Date(), nxt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 20 + Math.floor(Math.random() * 40));
+    setTimeout(function () { dailyRun().then(armMidnight, armMidnight); }, Math.min(2147000000, nxt - now));
+  }
+  function startDaily() {
+    if (C.mode !== 'standalone' || dailyArmed) return; dailyArmed = true;
+    syncNative(); dailyRun(); armMidnight();
+    setInterval(writeSnap, 5 * 60000);
+    D.addEventListener('visibilitychange', function () { if (D.hidden) writeSnap(); });
+    W.addEventListener('pagehide', function () { writeSnap(); });
+  }
+  function markSetup() { try { localStorage.setItem('ifx_sa_setup', '1'); } catch (e) { } }
+
+  // the Google device-code sign-in (shared by Settings and the first-run welcome)
+  async function deviceConnect(area, onOk, onCancel) {
+    area.textContent = ''; var msg = line(area, 'Contacting Google…');
+    try {
+      var d = await startDevice(); msg.textContent = '';
+      line(area, '1) Open this page on this phone (or any device):'); area.appendChild(btn(d.verification_url || 'google.com/device', false, function () { try { W.open(d.verification_url || 'https://www.google.com/device', '_blank'); } catch (e) { } }));
+      line(area, '2) Enter this code and approve:'); area.appendChild(el('div', 'font-size:1.7rem;font-weight:900;letter-spacing:3px;text-align:center;background:var(--card2,rgba(255,255,255,.06));border-radius:12px;padding:12px;', d.user_code));
+      area.appendChild(btn('Copy code', false, function () { try { navigator.clipboard.writeText(d.user_code); say('Code copied'); } catch (e) { } }));
+      var wait = line(area, 'Waiting for your approval…', 'color:var(--muted,#9aa3c7);font-size:.76rem'); area.appendChild(btn('Cancel', false, function () { cancelFlag = true; if (onCancel) onCancel(); }));
+      var j = await pollDevice(d, function () { return cancelFlag; }, function (sec) { wait.textContent = 'Waiting for your approval… ' + Math.floor(sec / 60) + ':' + pad(sec % 60) + ' left'; });
+      saveTokens(j, null); say('Google connected ✓'); if (onOk) onOk();
+    } catch (e) { if (/cancelled/.test(String(e && e.message))) return; area.textContent = ''; line(area, '❌ ' + human(e), 'color:#FF6B6B'); area.appendChild(btn('Try again', true, function () { cancelFlag = false; deviceConnect(area, onOk, onCancel); })); }
+  }
+  async function doRestore(o, p) { await p.restore(o); if (C.mode === 'standalone') markSetup(); say('Restored ✓ — reloading…'); setTimeout(function () { location.reload(); }, 900); }
+  /* "your latest backup": shows when it was made and how much it holds, then restore / choose another / (first run) start fresh */
+  async function latestPanel(box, p, o) {
+    o = o || {}; var st = line(box, 'Looking for your latest backup in Google Drive…', 'color:var(--muted,#9aa3c7)');
+    var fresh = function () { if (o.onFresh) o.onFresh(); else open(); };
+    try {
+      var fs = await list('iFiNeX-' + p.key + '-');
+      if (!fs.length) { st.textContent = o.welcome ? 'No earlier backup found on this Google account — you are starting fresh. Your data will be backed up here every night at 12:00 AM.' : 'No backup in Google Drive yet.'; box.appendChild(btn(o.welcome ? 'Start fresh' : 'Back', true, fresh)); return; }
+      var f = fs[0], b = await fetchBackup(f.id, f.name), err = p.valid(b); if (err) throw new Error(err);
+      st.textContent = ''; line(box, '✅ Latest backup found', 'font-weight:800'); line(box, 'Made: ' + when(b.exported_at || f.createdTime) + ' · ' + p.count(b) + ' records · ' + mb(f.size), '');
+      box.appendChild(btn('⬇ Restore this latest backup', true, async function () {
+        if (!o.welcome && !confirm('Restore the latest backup?\n\nMade: ' + when(b.exported_at || f.createdTime) + '\nRecords: ' + p.count(b) + '\n\nEverything currently on this phone will be REPLACED.')) return;
+        this.disabled = true; this.textContent = 'Restoring…'; try { await doRestore(b, p); } catch (e) { st.textContent = '❌ ' + human(e); st.style.color = '#FF6B6B'; this.disabled = false; this.textContent = '⬇ Restore this latest backup'; }
+      }));
+      box.appendChild(btn('Choose an older backup…', false, function () { restoreScreen(p, o); }));
+      box.appendChild(btn(o.welcome ? 'Start fresh instead (keep Google connected)' : 'Back', false, fresh));
+    } catch (e) { st.textContent = '❌ ' + human(e); st.style.color = '#FF6B6B'; box.appendChild(btn(o.welcome ? 'Start fresh' : 'Back', false, fresh)); }
+  }
+  async function restoreLatest() {
+    if (!configured()) { say('Google backup is not switched on in this app yet.'); return; }
+    var box = shell(), p = provider();
+    if (!(tok() || {}).refresh) { line(box, 'Sign in with Google first — then your latest backup is found automatically.', 'font-weight:700'); var area = el('div'); box.appendChild(area); area.appendChild(btn('Continue with Google', true, function () { deviceConnect(area, function () { restoreLatest(); }, open); })); box.appendChild(btn('Close', false, close)); return; }
+    latestPanel(box, p, {});
+  }
+  /* first run of the standalone app: Continue with Google (restores the latest backup) or start fresh. Resolves 'fresh' | 'skip' (a restore reloads the page). */
+  function welcome() {
+    return new Promise(function (resolve) {
+      if (C.mode !== 'standalone' || !configured()) return resolve('skip');
+      var box = shell(), p = provider(), done = function (r) { welcomeRes = null; close(); resolve(r); }; welcomeRes = resolve;
+      var head = box.firstChild; if (head && head.firstChild) head.firstChild.textContent = '👋 Welcome to iFiNeX';
+      var body = el('div'); box.appendChild(body);
+      var start = function () {
+        cancelFlag = false; body.textContent = '';
+        line(body, 'New phone, reinstalled, or the first time?', 'font-weight:800');
+        line(body, 'Continue with Google: if you used iFiNeX before, your latest backup comes back. Either way, your data is then backed up to your own Google Drive every night at 12:00 AM.', 'color:var(--muted,#9aa3c7);font-size:.78rem');
+        body.appendChild(btn('Continue with Google', true, function () {
+          var area = el('div'); body.textContent = ''; body.appendChild(area);
+          deviceConnect(area, function () { body.textContent = ''; latestPanel(body, p, { welcome: true, onFresh: function () { done('fresh'); } }); }, start);
+        }));
+        body.appendChild(btn('Start fresh without Google', false, function () { done('skip'); }));
+        line(body, 'You can connect Google later: ☰ → Backup & Restore → Google Drive.', 'color:var(--muted,#9aa3c7);font-size:.72rem');
+      };
+      start();
+    });
   }
 
   // ---------- UI ----------
@@ -147,10 +255,11 @@
     var b = el('button', 'width:100%;padding:13px;border-radius:12px;margin-top:8px;font-weight:800;font-size:.9rem;cursor:pointer;border:1px solid var(--border,rgba(255,255,255,.2));' + (primary ? 'background:var(--accent,#4d96ff);color:#fff;border-color:transparent;' : 'background:var(--card2,rgba(255,255,255,.06));color:' + (danger ? '#FF6B6B' : 'var(--text,inherit)') + ';'), label);
     b.addEventListener('click', fn); return b;
   }
-  function close() { cancelFlag = true; if (ov) { ov.remove(); ov = null; } }
+  var quiet = false, welcomeRes = null;
+  function close() { cancelFlag = true; if (ov) { ov.remove(); ov = null; } if (!quiet && welcomeRes) { var r = welcomeRes; welcomeRes = null; r('skip'); } }
   function line(box, t, css) { var d = el('div', 'font-size:.82rem;line-height:1.5;margin:10px 0;' + (css || ''), t); box.appendChild(d); return d; }
   function shell() {
-    close(); cancelFlag = false;
+    quiet = true; close(); quiet = false; cancelFlag = false;
     ov = el('div', 'position:fixed;inset:0;z-index:9910;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;');
     ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
     var box = el('div', 'width:min(520px,100%);max-height:90vh;overflow:auto;background:var(--card,#151528);color:var(--text,#e8ecff);border:1px solid var(--border,rgba(255,255,255,.15));border-radius:22px 22px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px));box-sizing:border-box;');
@@ -283,13 +392,13 @@
           try {
             msg.style.color = ''; msg.textContent = 'Downloading…'; var d = await call('/download', { id: f.id }); if (d.status !== 200) throw new Error(mHuman(d.j && d.j.error, d.j && d.j.message));
             var o = JSON.parse(d.text), err = R.validate(o); if (err) throw new Error(err);
-            if (!confirm('Restore this backup?\n\nMade: ' + when(o.exported_at) + '\nRecords: ' + R.count(o) + '\n\nOnly MISSING records are added back. Nothing existing is changed or deleted.')) { msg.textContent = ''; return; }
+            if (!(wo && wo.welcome) && !confirm('Restore this backup?\n\nMade: ' + when(o.exported_at) + '\nRecords: ' + R.count(o) + '\n\nOnly MISSING records are added back. Nothing existing is changed or deleted.')) { msg.textContent = ''; return; }
             msg.textContent = 'Restoring…'; var rep = await R.restore(o); try { alert(R.reportText(rep)); } catch (e) { } say('Restored ✓ — reloading…'); setTimeout(function () { location.reload(); }, 900);
           } catch (e) { msg.textContent = '❌ ' + (e.message || e); msg.style.color = '#FF6B6B'; }
         }));
       });
     } catch (e) { msg.textContent = '❌ ' + (e.message || e); msg.style.color = '#FF6B6B'; }
-    box.appendChild(btn('Back', false, open));
+    box.appendChild(btn('Back', false, function () { if (wo && wo.welcome && wo.onFresh) wo.onFresh(); else open(); }));
   }
   function hashReturn() {                                      // the browser comes back from Google as  …?gdrive=ok | err_xxx
     var m = /[?#&]gdrive=([\w]+)/.exec((location.search || '') + (location.hash || '')); if (!m) return;
@@ -315,17 +424,19 @@
     if (!t || !t.refresh) return connectScreen(box, p);
     line(box, '✅ Connected as ' + (t.email || 'your Google account'), 'font-weight:800');
     line(box, 'Backups go to a hidden folder only this app can see, in YOUR Google Drive. ' + (p.canRestore ? 'You can restore any of them here.' : 'Restore is not available here.'), 'color:var(--muted,#9aa3c7);font-size:.76rem');
-    var st = line(box, 'Last Drive backup: ' + (ls(LAST) ? when(ls(LAST)) : 'never'));
+    var stand = C.mode === 'standalone', st = line(box, 'Last Drive backup: ' + (ls(LAST) ? when(ls(LAST)) : 'never'));
+    if (stand) { line(box, '🌙 Automatic backup every night at about 12:00 AM (the newest 14 are kept). Change phone or reinstall → Continue with Google → your latest backup comes back.', 'color:var(--muted,#9aa3c7);font-size:.76rem'); nativeStatus().then(function (ns) { if (ns && ns.lastOkAt) { st.textContent = 'Last backup: ' + when(new Date(Math.max(+new Date(ls(LAST) || 0), ns.lastOkAt)).toISOString()) + (ns.lastError ? ' · ⚠ ' + ns.lastError : ''); } else if (ns && ns.lastError) st.textContent += ' · ⚠ ' + ns.lastError; }); }
     box.appendChild(btn('⬆ Back up to Google Drive now', true, async function () {
       var b = this; b.disabled = true; b.textContent = 'Backing up…';
       try { var r = await backupNow(); st.textContent = 'Last Drive backup: ' + when(ls(LAST)) + ' · ' + r.records + ' records · ' + mb(r.file.size); say('Backed up to Google Drive ✓'); }
       catch (e) { st.textContent = '❌ ' + human(e); st.style.color = '#FF6B6B'; }
       b.disabled = false; b.textContent = '⬆ Back up to Google Drive now';
     }));
+    if (p.canRestore && stand) box.appendChild(btn('⬇ Restore latest backup', true, function () { restoreLatest(); }));
     if (p.canRestore) box.appendChild(btn('⬇ Restore from Google Drive…', false, function () { restoreScreen(p); }));
     else box.appendChild(btn('📄 See my Drive backups', false, function () { restoreScreen(p); }));
     var auto = el('label', 'display:flex;gap:8px;align-items:center;font-size:.8rem;margin:12px 2px 0;'), cb = el('input'); cb.type = 'checkbox'; cb.checked = ls(AUTO) !== '0';
-    cb.addEventListener('change', function () { ls(AUTO, cb.checked ? '1' : '0'); }); auto.appendChild(cb); auto.appendChild(el('span', '', 'Back up automatically about once a week when the app opens')); box.appendChild(auto);
+    cb.addEventListener('change', function () { ls(AUTO, cb.checked ? '1' : '0'); syncNative(); }); auto.appendChild(cb); auto.appendChild(el('span', '', stand ? 'Back up automatically every night at 12:00 AM' : 'Back up automatically about once a week when the app opens')); box.appendChild(auto);
     box.appendChild(btn('Disconnect Google', false, async function () { if (!confirm('Disconnect Google?\n\nYour existing backups stay in Drive; this app just stops using the account.')) return; await disconnect(); open(); }, true));
     box.appendChild(btn('Close', false, close));
   }
@@ -333,32 +444,21 @@
     line(box, 'Save your data to your own Google Drive so a lost or reset phone never means lost data.', 'font-weight:700');
     line(box, 'You sign in on Google’s own page (no password is typed into this app). The app only gets a hidden folder of its own — it cannot see your other Drive files or your e-mail.', 'color:var(--muted,#9aa3c7);font-size:.76rem');
     var area = el('div'); box.appendChild(area);
-    area.appendChild(btn('Connect my Google account', true, async function () {
-      area.textContent = ''; var msg = line(area, 'Contacting Google…');
-      try {
-        var d = await startDevice(); msg.textContent = '';
-        line(area, '1) Open this page on this phone (or any device):'); var lk = btn(d.verification_url || 'google.com/device', false, function () { try { W.open(d.verification_url || 'https://www.google.com/device', '_blank'); } catch (e) { } }); area.appendChild(lk);
-        line(area, '2) Enter this code and approve:'); var code = el('div', 'font-size:1.7rem;font-weight:900;letter-spacing:3px;text-align:center;background:var(--card2,rgba(255,255,255,.06));border-radius:12px;padding:12px;', d.user_code); area.appendChild(code);
-        area.appendChild(btn('Copy code', false, function () { try { navigator.clipboard.writeText(d.user_code); say('Code copied'); } catch (e) { } }));
-        var wait = line(area, 'Waiting for your approval…', 'color:var(--muted,#9aa3c7);font-size:.76rem'); area.appendChild(btn('Cancel', false, function () { cancelFlag = true; open(); }));
-        var j = await pollDevice(d, function () { return cancelFlag; }, function (s) { wait.textContent = 'Waiting for your approval… ' + Math.floor(s / 60) + ':' + pad(s % 60) + ' left'; });
-        saveTokens(j, null); say('Google connected ✓'); if (ov) open();
-      } catch (e) { if (/cancelled/.test(String(e && e.message))) return; area.textContent = ''; line(area, '❌ ' + human(e), 'color:#FF6B6B'); area.appendChild(btn('Try again', true, function () { open(); })); }
-    }));
+    area.appendChild(btn('Connect my Google account', true, function () { deviceConnect(area, function () { if (ov) open(); }, open); }));
     box.appendChild(btn('Close', false, close));
   }
-  async function restoreScreen(p) {
+  async function restoreScreen(p, wo) {
     var box = shell(); line(box, p.canRestore ? 'Choose a backup to restore' : 'Your Drive backups', 'font-weight:800'); var st = line(box, 'Loading…', 'color:var(--muted,#9aa3c7)');
     try {
       var fs = await list('iFiNeX-' + p.key + '-'); st.textContent = fs.length ? '' : 'No backups in Drive yet.';
       fs.forEach(function (f) {
-        box.appendChild(btn(when(f.createdTime) + ' · ' + mb(f.size), false, async function () {
+        box.appendChild(btn((fs.indexOf(f) === 0 ? '⭐ Latest · ' : '') + when(f.createdTime) + ' · ' + mb(f.size), false, async function () {
           if (!p.canRestore) { say('Restore is not available here.'); return; }
           try {
             st.textContent = 'Downloading…'; var o = await fetchBackup(f.id, f.name), err = p.valid(o); if (err) throw new Error(err);
             var cnt = p.count(o);
             if (!confirm('Restore this backup?\n\nMade: ' + when(o.exported_at) + '\nRecords: ' + cnt + '\n\n' + (p.restoreNote || 'Everything currently on this phone will be REPLACED.'))) { st.textContent = ''; return; }
-            await p.restore(o); say('Restored ✓ — reloading…'); setTimeout(function () { location.reload(); }, 900);
+            await doRestore(o, p);
           } catch (e) { st.textContent = '❌ ' + human(e); st.style.color = '#FF6B6B'; }
         }));
       });
@@ -384,9 +484,9 @@
     var b = D.createElement('button'); b.className = 'drawer-item ifx-gd-item'; b.textContent = '☁️ Google Drive backup'; b.addEventListener('click', function () { try { W.closeDrawer(); } catch (e) { } open(); });
     if (s) s.insertAdjacentElement('afterend', b); else dr.appendChild(b);
   }
-  W.ifxGDrive = { open: open, managed: useManaged, configured: configured, backupNow: backupNow, list: list, connected: function () { return !!(tok() || {}).refresh; }, _t: { startDevice: startDevice, pollDevice: pollDevice, upload: upload, fetchBackup: fetchBackup, access: access, autoRun: autoRun } };
+  W.ifxGDrive = { open: open, welcome: welcome, restoreLatest: restoreLatest, dailyRun: dailyRun, startDaily: startDaily, dataHash: dataHash, managed: useManaged, configured: configured, backupNow: backupNow, list: list, connected: function () { return !!(tok() || {}).refresh; }, _t: { startDevice: startDevice, pollDevice: pollDevice, upload: upload, fetchBackup: fetchBackup, access: access, autoRun: autoRun } };
   function boot() { if (C.mode === 'server') hashReturn();
     if (!C.native && C.mode !== 'standalone') return;   // the website itself: use the app for Drive backup (browsers block Google's device-code calls)
-    drawer(); setInterval(drawer, 1500); setTimeout(autoRun, 12000); }
+    drawer(); setInterval(drawer, 1500); if (C.mode === 'standalone') setTimeout(startDaily, 6000); else setTimeout(autoRun, 12000); }
   if (D.readyState === 'loading') D.addEventListener('DOMContentLoaded', boot); else boot();
 })(window, document);

@@ -639,7 +639,7 @@
     if (!R.withAll) h += '<div class="row"><button type="button" class="chip" data-a="allw">Select all</button><button type="button" class="chip" data-a="now">None</button></div><div class="pk">' + R.users.map(function (u) { var e = lower(u.email); return '<label class="ck"><input type="checkbox" data-w="' + esc(e) + '"' + (R.withPick[e] ? ' checked' : '') + '> ' + esc(u.name || u.email) + '</label>'; }).join('') + '</div>';
     h += '<div class="mods"><label class="ck"><input type="checkbox" data-dir="recv"' + (R.dirRecv !== false ? ' checked' : '') + '> 📥 What they owe the account (money coming in)</label><label class="ck"><input type="checkbox" data-dir="pay"' + (R.dirPay !== false ? ' checked' : '') + '> 📤 What the account owes them (money going out)</label></div>';
     h += '<div class="rstep">5 · Report type (tick one or both)</div><div class="mods"><label class="ck"><input type="checkbox" data-sh="bal"' + (R.showBal !== false ? ' checked' : '') + '> <b>Balances</b> — who pays whom, per-person month-by-month balance (brought forward + new − paid = closing), totals</label><label class="ck"><input type="checkbox" data-sh="full"' + (R.showFull ? ' checked' : '') + '> <b>Full breakdown</b> — every expense share, payment, settlement, instalment and spending line, newest first</label></div>';
-    h += '<div class="acts"><button data-a="prev" ' + (busy ? 'disabled' : '') + '>👁 Preview</button><button data-a="pdf" ' + (busy ? 'disabled' : '') + '>⬇ PDF</button><button data-a="xlsx" ' + (busy ? 'disabled' : '') + '>⬇ Excel</button><button class="g" data-a="csv" ' + (busy ? 'disabled' : '') + '>⬇ CSV</button></div><div class="msg" id="rp-msg" role="status"></div><div id="rp-prev">' + (MODEL ? previewHtml(MODEL) : '') + '</div>';
+    h += '<div class="acts"><button data-a="prev" ' + (busy ? 'disabled' : '') + '>👁 Preview</button><button data-a="pdf" ' + (busy ? 'disabled' : '') + '>⬇ PDF</button><button data-a="xlsx" ' + (busy ? 'disabled' : '') + '>⬇ Excel</button><button class="g" data-a="csv" ' + (busy ? 'disabled' : '') + '>⬇ CSV</button></div><div class="row" style="margin-top:8px;"><button type="button" class="chip" data-a="cmp">🔀 Compare 2, 3, 4 … periods side by side</button></div><div class="msg" id="rp-msg" role="status"></div><div id="rp-prev">' + (MODEL ? previewHtml(MODEL) : '') + '</div>';
     var scroll = OV.querySelector('.box') ? OV.querySelector('.box').scrollTop : 0;
     OV.innerHTML = '<div class="box">' + h + '</div>'; var bx = OV.querySelector('.box'); if (bx) bx.scrollTop = scroll;
   }
@@ -658,6 +658,7 @@
     if (a === 'nou') { R.picked = {}; MODEL = null; return paint(); }
     if (a === 'allw') { R.users.forEach(function (u) { R.withPick[lower(u.email)] = true; }); MODEL = null; return paint(); }
     if (a === 'now') { R.withPick = {}; MODEL = null; return paint(); }
+    if (a === 'cmp') { var en = (R.entry === 'bill' || R.entry === 'et' || R.entry === 'bp') ? R.entry : 'all'; close(); if (W.ifxCompare) W.ifxCompare.open(en, { kind: R.kind }); return; }
     if (a === 'prev' || a === 'pdf' || a === 'xlsx' || a === 'csv') return run(a);
   }
   function onChange(e) {
@@ -708,7 +709,7 @@
   function close() { if (OV) OV.classList.remove('open'); }
   D.addEventListener('keydown', function (e) { if (e.key === 'Escape' && OV && OV.classList.contains('open')) close(); });
 
-  W.ifxReports = { open: open, close: close, _periodOf: periodOf, _state: function () { return R; }, _build: function () { return build(); } };
+  W.ifxReports = { open: open, close: close, render: { previewHtml: previewHtml, toPdf: toPdf, toXlsx: toXlsx, toCsv: toCsv, saveBlob: saveBlob }, _periodOf: periodOf, _state: function () { return R; }, _build: function () { return build(); } };
 
 
   /* old buttons keep working: the Bill Tracker "View report" button and the old on-screen report's PDF / Excel use the safe saver */

@@ -75,7 +75,7 @@
       var r = await sb.rpc('register_device', { p_device_id: prep.deviceId, p_secret: prep.secret, p_label: prep.label || 'Android phone', p_platform: 'android' });
       if (r.error) throw new Error(r.error.message);
       if (!r.data || r.data.ok !== true) throw new Error((r.data && r.data.error) || 'register_device failed');
-      await P.start({ pollSeconds: 120 });
+      await P.start({ pollSeconds: 300 });
       setWant(email);
       await W.ifxAlertsStatus();
       if (!silent) say('✅ Background alerts are ON');

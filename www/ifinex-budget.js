@@ -99,7 +99,7 @@
     sInc = sInc.filter(function (x) { return viewOk('income', x); }); sIts = sIts.filter(function (x) { return viewOk('item', x); }); sGoals = sGoals.filter(function (g) { return viewOk('goal', g); });
     var head = '<div class="section-title">💰 Budget &amp; Salary Planner</div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;"><button class="btn-tiny" data-act="m-" aria-label="Previous month">‹</button><b style="font-size:.95rem;">' + esc(monthLabel(m)) + '</b><button class="btn-tiny" data-act="m+" aria-label="Next month">›</button></div>' +
-      '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' + X.button(S.tab==='budget'?'bp_items':S.tab==='goals'?'bp_goals':'bp_income', 'Import / Export / Template') + '<button class="btn-tiny" onclick="window.ifxReports&&ifxReports.open(\'bp\')">📊 Reports &amp; downloads</button></div>' +
+      '<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">' + X.button(S.tab==='budget'?'bp_items':S.tab==='goals'?'bp_goals':'bp_income', 'Import / Export / Template') + '<button class="btn-tiny" onclick="window.ifxReports&&ifxReports.open(\'bp\')">📊 Reports &amp; downloads</button><button class="btn-tiny" data-act="bp-clone">📑 Clone this month</button><button class="btn-tiny" onclick="window.ifxCompare&&ifxCompare.open(\'bp\')">🔀 Compare months</button></div>' +
       '<div class="ptabs">' + [['overview', '📊 Overview'], ['salary', '💼 Salary'], ['budget', '🎯 Budget'], ['goals', '🏆 Goals']].map(function (t) { return '<button class="ptab ' + (S.tab === t[0] ? 'on' : '') + '" data-act="tab" data-v="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>';
     root.innerHTML = head + filt + (S.tab === 'overview' ? vOverview(inc, its) : S.tab === 'salary' ? vSalary(inc, sInc) : S.tab === 'budget' ? vBudget(sIts, its) : vGoals(sGoals));
   }
@@ -191,6 +191,37 @@
     'it-edit': async function (el) { var x = byId(S.items, el.getAttribute('data-id')); if (!x) return; var v = await ask('Edit budget line', [{ k: 'category', label: 'Category', val: x.category }, { k: 'bucket', label: 'Group', options: Object.keys(BUCKETS).map(function (b) { return [b, BUCKETS[b][1]]; }), val: x.bucket }, { k: 'planned', label: 'Planned amount (AED)', type: 'number', val: x.planned }]); if (!v) return; var a = num(v.planned); if (!v.category || !(a >= 0)) return toast('Enter a category and an amount'); await run(sb.from('bp_items').update({ category: v.category.slice(0, 80), bucket: v.bucket, planned: a }).eq('id', x.id), 'Saved ✓'); },
     'it-del': async function (el) { if (!confirm('Delete this budget line?')) return; await run(sb.from('bp_items').delete().eq('id', el.getAttribute('data-id')), 'Deleted'); },
     'it-copy': async function () { var prev = shiftMonth(S.month, -1), rows = S.items.filter(function (x) { return x.month === prev; }), have = new Set(S.items.filter(function (x) { return x.month === S.month; }).map(function (x) { return low(x.category); })); rows = rows.filter(function (x) { return !have.has(low(x.category)); }); if (!rows.length) return toast('Nothing new to copy from ' + monthLabel(prev)); await run(sb.from('bp_items').insert(rows.map(function (x) { return Object.assign(base(), { month: S.month, category: x.category, bucket: x.bucket, planned: x.planned, note: x.note || '' }); })), 'Copied ' + rows.length + ' lines ✓'); },
+    // v14.0 — CLONE the month on screen into one or more other months (income + budget lines), no typing again
+    'bp-clone': async function () {
+      var src = S.month, inc0 = S.income.filter(function (x) { return x.month === src; }), its0 = S.items.filter(function (x) { return x.month === src; });
+      if (!inc0.length && !its0.length) return toast('Nothing to clone in ' + monthLabel(src) + ' — add income or budget lines first');
+      var v = await W.ifxAsk('📑 Clone budget — ' + monthLabel(src), [
+        { k: 'to', label: 'Copy to month', type: 'month', val: shiftMonth(src, 1), req: true },
+        { k: 'n', label: 'How many months in a row', type: 'select', val: '1', options: [['1', 'Just that month'], ['2', '2 months'], ['3', '3 months'], ['6', '6 months'], ['12', '12 months (a full year)']] },
+        { k: 'what', label: 'What to copy', type: 'checks', val: ['income', 'items'], options: [['income', 'Income / salary (' + inc0.length + ')'], ['items', 'Budget lines (' + its0.length + ')']] },
+        { k: 'mode', label: 'If a month already has entries', type: 'select', val: 'skip', options: [['skip', 'Add only what is missing (same name = skipped)'], ['add', 'Add everything again']] }
+      ], { ok: 'Clone budget', sub: 'The month you are viewing stays unchanged. Savings goals are not month-based, so they are not copied.', validate: function (v) { if (!/^\d{4}-\d{2}$/.test(v.to)) return 'Pick the month to copy to'; if (v.to === src && v.n === '1') return 'Pick a different month'; if (!v.what.length) return 'Tick income and/or budget lines'; return null; } });
+      if (!v) return;
+      var months = [], i; for (i = 0; i < (+v.n || 1); i++) months.push(shiftMonth(v.to, i)); months = months.filter(function (m) { return m !== src; });
+      var incRows = [], itRows = [], skipped = 0, lastDay = function (m) { var p = m.split('-').map(Number); return new Date(p[0], p[1], 0).getDate(); };
+      months.forEach(function (m) {
+        var haveI = new Set(S.income.filter(function (x) { return x.month === m; }).map(function (x) { return [low(x.source), x.kind, Number(x.amount).toFixed(2)].join('|'); })), haveC = new Set(S.items.filter(function (x) { return x.month === m; }).map(function (x) { return low(x.category); }));
+        if (v.what.indexOf('income') >= 0) inc0.forEach(function (x) {
+          if (v.mode === 'skip' && haveI.has([low(x.source), x.kind, Number(x.amount).toFixed(2)].join('|'))) { skipped++; return; }
+          var pd = null; if (x.pay_date) { var d = Math.min(+String(x.pay_date).slice(8, 10) || 1, lastDay(m)); pd = m + '-' + String(d).padStart(2, '0'); }
+          incRows.push(Object.assign(base(), { month: m, source: x.source, kind: x.kind, amount: x.amount, pay_date: pd, note: x.note || '' }));
+        });
+        if (v.what.indexOf('items') >= 0) its0.forEach(function (x) {
+          if (v.mode === 'skip' && haveC.has(low(x.category))) { skipped++; return; }
+          itRows.push(Object.assign(base(), { month: m, category: x.category, bucket: x.bucket, planned: x.planned, note: x.note || '' }));
+        });
+      });
+      if (!incRows.length && !itRows.length) return toast('Nothing new to copy — everything already exists there');
+      var r1 = incRows.length ? await sb.from('bp_income').insert(incRows) : {}, r2 = itRows.length && !(r1 && r1.error) ? await sb.from('bp_items').insert(itRows) : {};
+      var er = (r1 && r1.error) || (r2 && r2.error); if (er) { toast('❌ ' + er.message); return; }
+      toast('Cloned ✓ — ' + incRows.length + ' income + ' + itRows.length + ' budget lines into ' + months.length + ' month' + (months.length === 1 ? '' : 's') + (skipped ? ' · ' + skipped + ' already there' : ''));
+      S.month = months[0]; pickView(); await load();
+    },
     'g-add': async function () { var v = await ask('New savings goal', [{ k: 'name', label: 'Goal name', ph: 'Emergency fund' }, { k: 'target', label: 'Target (AED)', type: 'number' }, { k: 'saved', label: 'Already saved (AED)', type: 'number', val: 0 }, { k: 'due_date', label: 'Target date (optional)', type: 'date' }]); if (!v) return; var t = num(v.target), sv = num(v.saved || 0); if (!v.name || !(t > 0) || !(sv >= 0)) return toast('Enter a name and a target above 0'); await run(sb.from('bp_goals').insert(Object.assign(base(), { name: v.name.slice(0, 120), target: t, saved: sv, due_date: v.due_date || null })), 'Goal added ✓'); },
     'g-edit': async function (el) { var g = byId(S.goals, el.getAttribute('data-id')); if (!g) return; var v = await ask('Edit goal', [{ k: 'name', label: 'Goal name', val: g.name }, { k: 'target', label: 'Target (AED)', type: 'number', val: g.target }, { k: 'saved', label: 'Saved so far (AED)', type: 'number', val: g.saved }, { k: 'due_date', label: 'Target date', type: 'date', val: g.due_date || '' }]); if (!v) return; var t = num(v.target), sv = num(v.saved); if (!v.name || !(t > 0) || !(sv >= 0)) return toast('Enter a name and a target above 0'); await run(sb.from('bp_goals').update({ name: v.name.slice(0, 120), target: t, saved: sv, due_date: v.due_date || null }).eq('id', g.id), 'Saved ✓'); },
     'g-add-money': async function (el) { var g = byId(S.goals, el.getAttribute('data-id')); if (!g) return; var v = await ask('Add money to “' + g.name + '”', [{ k: 'amt', label: 'Amount (AED)', type: 'number' }], 'Add'); if (!v) return; var a = num(v.amt); if (!(a > 0)) return toast('Enter an amount above 0'); await run(sb.from('bp_goals').update({ saved: Math.round((Number(g.saved) + a) * 100) / 100 }).eq('id', g.id), 'Added ✓'); },

@@ -45,7 +45,8 @@
       '<button class="act p" onclick="ifxBackup.exportNow()">⬇ Create backup file<small>Saves ALL your data (every module, theme, background) as one .json file</small></button>' +
       '<button class="act" onclick="document.getElementById(\'ifx-bk-file\').click()">⬆ Restore from a backup file<small>Replaces everything on this phone with the file’s content</small></button>' +
       '<input type="file" id="ifx-bk-file" accept=".json,application/json" style="display:none" onchange="ifxBackup.pick(this)">' +
-      '<button class="act" onclick="ifxBackup.close();ifxGDrive&&ifxGDrive.open()">☁️ Google Drive backup<small>Back up to (and restore from) a hidden folder in YOUR Google Drive</small></button>' +
+      '<button class="act p" onclick="ifxBackup.close();ifxGDrive&&ifxGDrive.open()">☁️ Google Drive backup — automatic, every night at 12:00 AM<small>Sign in with Google once. Back up to (and restore from) a hidden folder in YOUR Google Drive</small></button>' +
+      '<button class="act" onclick="ifxBackup.close();ifxGDrive&&ifxGDrive.restoreLatest()">⬇ Restore my latest Google backup<small>New phone or reinstalled? Sign in with Google and get your latest data back</small></button>' +
       '<button class="act d" onclick="ifxBackup.erase()">🗑 Erase everything on this phone<small>Starts the app empty. Make a backup first!</small></button>';
   }
   var B = W.ifxBackup = {
@@ -92,7 +93,7 @@
     var el = D.getElementById('ifx-sa-banner'); if (!el) { el = D.createElement('div'); el.id = 'ifx-sa-banner'; el.innerHTML = '<i>💾 Your data is only on this phone — make a backup.</i><button onclick="ifxBackup.open()">Backup</button><button style="background:transparent;color:inherit;padding:8px" onclick="this.parentNode.style.display=\'none\';localStorage.setItem(\'ifx_sa_snooze\',Date.now())">✕</button>'; D.body.appendChild(el); }
     L.counts().then(function (c) {
       var recs = (c.bill_expenses || 0) + (c.expenses || 0) + (c.et_entries || 0) + (c.bill_payee_entries || 0) + (c.bp_items || 0);
-      var last = L.lastBackup(), age = last ? (Date.now() - new Date(last)) / 864e5 : 999, snooze = +(localStorage.getItem('ifx_sa_snooze') || 0);
+      var last = [L.lastBackup(), localStorage.getItem('ifx_gd_last') || ''].sort().pop(), age = last ? (Date.now() - new Date(last)) / 864e5 : 999, snooze = +(localStorage.getItem('ifx_sa_snooze') || 0);
       el.style.display = (recs >= 5 && age > 14 && Date.now() - snooze > 864e5) ? 'flex' : 'none';
     });
   }
@@ -100,6 +101,8 @@
   // ---- first run: your name -----------------------------------------------------------
   async function firstRun() {
     if (localStorage.getItem('ifx_sa_setup')) return;
+    // v14.0: new phone / reinstall? Google sign-in first — the latest backup can be restored, or the user starts fresh
+    try { if (W.ifxGDrive && W.ifxGDrive.welcome) { await W.ifxGDrive.welcome(); if (localStorage.getItem('ifx_sa_setup')) return; } } catch (e) { }
     var v = await W.ifxAsk('👋 Welcome to iFiNeX', [
       { k: 'name', label: 'What should the app call you?', val: '', ph: 'Your name', req: true },
       { k: 'emoji', label: 'Pick an emoji', type: 'select', options: ['😀', '😎', '🦁', '🐯', '🌟', '🚀', '👨', '👩', '🧑'], val: '😀' }
