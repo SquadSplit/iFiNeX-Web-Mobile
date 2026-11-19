@@ -16,7 +16,7 @@
   var MAX_KEEP = 10, MAX_UPLOAD = 4.8 * 1048576;
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { } return null; }
   function jp(s) { try { return JSON.parse(s); } catch (e) { return null; } }
-  function configured() { return !!(G && G.clientId && G.clientSecret && /^[\w.-]+\.apps\.googleusercontent\.com$/.test(G.clientId)); }
+  function configured() { return !!(G && G.clientId && (G.clientSecret || G.tokenProxy) && /^[\w.-]+\.apps\.googleusercontent\.com$/.test(G.clientId)); }
   function tok() { return jp(ls(LSK)) || null; }
   function native() { return !!C.native; }
   function say(m) { try { (W.toast || W.showToast)(m); } catch (e) { alert(m); } }
@@ -33,6 +33,20 @@
       var d = typeof r.data === 'string' ? (jp(r.data) || {}) : (r.data || {}); return { status: r.status, json: d };
     }
     var f = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: body, credentials: 'omit' });
+    return { status: f.status, json: await f.json().catch(function () { return {}; }) };
+  }
+  // v14.3: with google.tokenProxy the client SECRET stays on the server (Supabase function "google-oauth"); no secret in GitHub or in the APK.
+  async function gtoken0(a) { var r = await fetch(G.tokenProxy, { method: 'POST', headers: { 'Content-Type': 'application/json', apikey: C.supabaseKey || '' }, body: JSON.stringify(a), credentials: 'omit' }); return r.status; }
+  async function gtoken(o) {
+    if (!(G && G.tokenProxy)) return post(OAUTH + '/token', o);
+    var a = o.grant_type === 'refresh_token' ? { action: 'refresh', refresh_token: o.refresh_token } : { action: 'exchange', code: o.code, code_verifier: o.code_verifier, redirect_uri: o.redirect_uri };
+    var N = W.Capacitor && W.Capacitor.Plugins && W.Capacitor.Plugins.CapacitorHttp, hdr = { 'Content-Type': 'application/json' };
+    if (C.supabaseKey) { hdr.apikey = C.supabaseKey; }
+    if (native() && N && N.request) {
+      var r = await N.request({ url: G.tokenProxy, method: 'POST', headers: hdr, data: a });
+      return { status: r.status, json: typeof r.data === 'string' ? (jp(r.data) || {}) : (r.data || {}) };
+    }
+    var f = await fetch(G.tokenProxy, { method: 'POST', headers: hdr, body: JSON.stringify(a), credentials: 'omit' });
     return { status: f.status, json: await f.json().catch(function () { return {}; }) };
   }
   function emailOf(idt) { try { var p = idt.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'); return JSON.parse(atob(p + '==='.slice((p.length + 3) % 4))).email || ''; } catch (e) { return ''; } }
@@ -60,16 +74,62 @@
     var t = { access: j.access_token, exp: Date.now() + (+j.expires_in || 3000) * 1000 - 60000, refresh: j.refresh_token || (prev && prev.refresh) || '', email: (j.id_token ? emailOf(j.id_token) : '') || (prev && prev.email) || '' };
     ls(LSK, JSON.stringify(t)); setTimeout(syncNative, 50); return t;
   }
+
+  // ---------- v14.2: normal Google sign-in (account chooser + consent, then straight back to the app) ----------
+  // Needs a Google "Web application" client with the redirect page below registered; ifinex-config.json → google.redirect turns it on.
+  // Without google.redirect the older "enter a code" sign-in is used.
+  function webFlow() { return !!(G && G.redirect && /^https:\/\//.test(G.redirect) && (G.tokenProxy || G.clientSecret)); }
+  var APPID = (C && C.appId) || 'io.github.squadsplit.app', PK = 'ifx_gd_pkce', RET = 'ifx_gd_ret';
+  function b64u(buf) { var s = '', a = new Uint8Array(buf); for (var i = 0; i < a.length; i++) s += String.fromCharCode(a[i]); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
+  function rnd(n) { var a = new Uint8Array(n); crypto.getRandomValues(a); return b64u(a.buffer); }
+  async function authUrl() {
+    var verifier = rnd(48), state = rnd(12) + '.' + (native() ? APPID : 'web');
+    var challenge = b64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    ls(PK, JSON.stringify({ v: verifier, s: state, t: Date.now() })); ls(RET, null);
+    return 'https://accounts.google.com/o/oauth2/v2/auth?' + form({ client_id: G.clientId, redirect_uri: G.redirect, response_type: 'code', scope: SCOPE, access_type: 'offline', prompt: 'select_account consent', include_granted_scopes: 'false', state: state, code_challenge: challenge, code_challenge_method: 'S256' });
+  }
+  function parseRet(u) { var q = String(u || '').split('?')[1] || ''; q = q.split('#')[0]; var o = {}; q.split('&').forEach(function (p) { var kv = p.split('='); if (kv[0]) o[decodeURIComponent(kv[0])] = decodeURIComponent((kv[1] || '').replace(/\+/g, ' ')); }); return o; }
+  async function exchange(r) {
+    var pk = jp(ls(PK)); ls(PK, null); ls(RET, null);
+    if (!pk || r.state !== pk.s) throw new Error('state');
+    if (r.error) throw new Error(r.error === 'access_denied' ? 'denied' : 'google:' + r.error);
+    if (!r.code) throw new Error('nocode');
+    var x = await gtoken({ client_id: G.clientId, client_secret: G.clientSecret, code: r.code, code_verifier: pk.v, redirect_uri: G.redirect, grant_type: 'authorization_code' });
+    if (x.status !== 200 || !x.json.access_token) throw new Error('token:' + (x.json.error || x.status));
+    if (!x.json.refresh_token) throw new Error('norefresh');
+    return x.json;
+  }
+  async function webWait(cancelled) {
+    var until = Date.now() + 10 * 60000;
+    while (Date.now() < until) {
+      if (cancelled()) throw new Error('cancelled');
+      var got = ls(RET); if (got) return parseRet(got);
+      try { var nb = nat(); if (nb && nb.takeOAuth) { var t = await nb.takeOAuth(); if (t && t.url) return parseRet(t.url); } } catch (e) { }
+      await new Promise(function (ok) { setTimeout(ok, 700); });
+    }
+    throw new Error('expired');
+  }
+  async function webConnect(area, onOk, onCancel) {
+    area.textContent = ''; var msg = line(area, 'Opening Google…');
+    try {
+      var url = await authUrl(); try { W.open(url, '_blank'); } catch (e) { location.href = url; }
+      msg.textContent = 'Choose your Google account in the page that opened and tap Allow. You will come straight back here.';
+      area.appendChild(btn('Open Google again', false, function () { try { W.open(url, '_blank'); } catch (e) { } }));
+      area.appendChild(btn('Cancel', false, function () { cancelFlag = true; if (onCancel) onCancel(); }));
+      var r = await webWait(function () { return cancelFlag; }); msg.textContent = 'Finishing sign-in…';
+      saveTokens(await exchange(r), null); say('Google connected ✓'); if (onOk) onOk();
+    } catch (e) { if (/cancelled/.test(String(e && e.message))) return; area.textContent = ''; line(area, '❌ ' + human(e), 'color:#FF6B6B'); area.appendChild(btn('Try again', true, function () { cancelFlag = false; webConnect(area, onOk, onCancel); })); }
+  }
   async function access() {
     var t = tok(); if (!t || !t.refresh) throw new Error('not_connected');
     if (t.access && t.exp > Date.now()) return t.access;
-    var r = await post(OAUTH + '/token', { client_id: G.clientId, client_secret: G.clientSecret, refresh_token: t.refresh, grant_type: 'refresh_token' });
+    var r = await gtoken({ client_id: G.clientId, client_secret: G.clientSecret, refresh_token: t.refresh, grant_type: 'refresh_token' });
     if (r.status !== 200 || !r.json.access_token) { if (r.json.error === 'invalid_grant') { ls(LSK, null); throw new Error('not_connected'); } throw new Error('refresh:' + (r.json.error || r.status)); }
     return saveTokens(r.json, t).access;
   }
   async function disconnect() {
     var t = tok(); ls(LSK, null); ls(DAYK, null); ls(HASHK, null); try { var nb = nat(); if (nb) await nb.configure({ enabled: false }); } catch (e0) { }
-    try { if (t && (t.refresh || t.access)) await post(OAUTH + '/revoke', { token: t.refresh || t.access }); } catch (e) { }
+    try { if (t && (t.refresh || t.access)) { if (G && G.tokenProxy) await gtoken0({ action: 'revoke', token: t.refresh || t.access }); else await post(OAUTH + '/revoke', { token: t.refresh || t.access }); } } catch (e) { }
   }
 
   // ---------- Drive (appDataFolder) ----------
@@ -155,7 +215,7 @@
   var syncing = false;
   async function syncNative() {
     var n = nat(); if (!n || C.mode !== 'standalone' || syncing) return; syncing = true;
-    try { var t = tok(); if (t && t.refresh && configured() && ls(AUTO) !== '0') { await n.configure({ enabled: true, clientId: G.clientId, clientSecret: G.clientSecret, refreshToken: t.refresh, email: t.email || '' }); await writeSnap(); } else await n.configure({ enabled: false }); } catch (e) { }
+    try { var t = tok(); if (t && t.refresh && configured() && ls(AUTO) !== '0') { await n.configure({ enabled: true, clientId: G.clientId, clientSecret: G.clientSecret || '', tokenProxy: G.tokenProxy || '', apikey: C.supabaseKey || '', refreshToken: t.refresh, email: t.email || '' }); await writeSnap(); } else await n.configure({ enabled: false }); } catch (e) { }
     syncing = false;
   }
   async function nativeStatus() { var n = nat(); if (!n) return null; try { return await n.status(); } catch (e) { return null; } }
@@ -191,6 +251,7 @@
 
   // the Google device-code sign-in (shared by Settings and the first-run welcome)
   async function deviceConnect(area, onOk, onCancel) {
+    if (webFlow()) return webConnect(area, onOk, onCancel);
     area.textContent = ''; var msg = line(area, 'Contacting Google…');
     try {
       var d = await startDevice(); msg.textContent = '';
@@ -273,6 +334,10 @@
     if (/not_connected/.test(m)) return 'Google is not connected (or access was removed). Connect again.';
     if (/too_big/.test(m)) return 'This backup is too large to send from the app. Use “Create backup file” instead.';
     if (/denied/.test(m)) return 'Google access was declined.';
+    if (/norefresh/.test(m)) return 'Google did not allow offline access. Open myaccount.google.com/permissions, remove iFiNeX, then sign in again.';
+    if (/^Error: state|state$/.test(m)) return 'This sign-in link expired or belongs to another attempt. Tap Try again.';
+    if (/token:invalid_grant/.test(m)) return 'Google refused the sign-in code (it may have been used twice). Tap Try again.';
+    if (/token:(redirect_uri_mismatch|invalid_client)/.test(m)) return 'Google rejected the app settings (' + m.replace('token:', '') + '). The owner must check the Web client id, secret and redirect address in ifinex-config.json.';
     if (/expired/.test(m)) return 'The code expired. Start again.';
     if (/Failed to fetch|NetworkError|network|timeout/i.test(m)) return 'No connection to Google right now. Check your internet and try again.';
     if (/device_code:invalid_client|token:invalid_client/.test(m)) return 'Google rejected this app’s client settings (invalid_client). The server owner must check the Google client id/secret.';

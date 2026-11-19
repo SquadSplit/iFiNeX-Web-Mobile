@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>Signing in · iFiNeX</title>
+<style>
+:root{--bg:#0f1020;--card:#181a30;--text:#e8ecff;--muted:#9aa3c7;--accent:#4d96ff}
+@media (prefers-color-scheme:light){:root{--bg:#f3f5ff;--card:#fff;--text:#1a1c33;--muted:#5b6385}}
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px;box-sizing:border-box}
+.c{max-width:420px;width:100%;background:var(--card);border-radius:20px;padding:28px 22px;text-align:center}
+.i{font-size:3rem}h1{font-size:1.2rem;margin:10px 0 6px}p{color:var(--muted);line-height:1.5;font-size:.92rem}
+a.b{display:none;margin-top:16px;padding:13px;border-radius:12px;background:var(--accent);color:#fff;font-weight:800;text-decoration:none}
+</style></head><body><div class="c"><div class="i">☁️</div><h1 id="t">Finishing sign-in…</h1><p id="m">One moment.</p><a class="b" id="go" href="#">Open iFiNeX</a></div>
+<script>
+/* Google sends the browser here after the user taps Allow. This page holds NO secret: it only hands ?code=…&state=… back to iFiNeX
+   (the app on Android through its own link, or the website tab through localStorage). The code is useless without the app's private PKCE verifier. */
+(function(){
+  var q=location.search||''; try{ localStorage.setItem('ifx_gd_ret', q); }catch(e){}
+  try{ var bc=new BroadcastChannel('ifx_gd'); bc.postMessage(q); }catch(e){}
+  var st=(/[?&]state=([^&]+)/.exec(q)||[])[1]||''; st=decodeURIComponent(st); var pkg=st.split('.').slice(1).join('.');
+  var t=document.getElementById('t'),m=document.getElementById('m'),go=document.getElementById('go');
+  if(/^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)+$/i.test(pkg)){
+    var link=pkg+'://oauth'+q; go.href=link; go.style.display='block'; t.textContent='Sign-in done'; m.textContent='Returning to the iFiNeX app… if nothing happens, tap the button.';
+    setTimeout(function(){ location.replace(link); },250);
+  } else { t.textContent='Sign-in done'; m.textContent='You can close this tab and go back to iFiNeX.'; setTimeout(function(){ try{window.close();}catch(e){} },800); }
+})();
+</script></body></html>

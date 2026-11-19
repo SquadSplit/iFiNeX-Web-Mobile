@@ -82,6 +82,7 @@
     var ws = origin ? origin.replace(/^https:/, 'wss:') : '';
     var gcfg = cfg.google && cfg.google.clientId;
     var goog = gcfg ? ' https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com' : '';
+    try { if (gcfg && cfg.google.tokenProxy) goog += ' ' + new URL(cfg.google.tokenProxy).origin; } catch (e2) { }   // v14.3: the server function that holds the Google client secret
     if (!onStart) {
       var csp = "connect-src 'self' " + origin + ' ' + ws + goog + "; img-src 'self' data: blob: " + origin + ';';
       D.write('<meta http-equiv="Content-Security-Policy" content="' + csp.replace(/"/g, '') + '">');

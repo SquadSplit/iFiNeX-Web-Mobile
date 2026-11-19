@@ -1,8 +1,13 @@
 {
   "format": "ifinex-server",
   "version": 1,
-  "name": "iFiNeX \u00b7 Squad Split Hub",
+  "name": "iFiNeX · Squad Split Hub",
   "site": "https://squadsplit.github.io",
   "supabaseUrl": "https://lznnetxeklmdrykxtsbm.supabase.co",
-  "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6bm5ldHhla2xtZHJ5a3h0c2JtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTIxMDMsImV4cCI6MjA4ODk4ODEwM30.cD_n9iCvTTkwgtwh2Qt8Ux9iJR2OfkgCutC2eif8JQo"
+  "supabaseKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx6bm5ldHhla2xtZHJ5a3h0c2JtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0MTIxMDMsImV4cCI6MjA4ODk4ODEwM30.cD_n9iCvTTkwgtwh2Qt8Ux9iJR2OfkgCutC2eif8JQo",
+  "google": {
+    "clientId": "113807571812-qsh977p1b5bm0en5p2e4dc7no2lj901t.apps.googleusercontent.com",
+    "redirect": "https://squadsplit.github.io/gdrive-return.html",
+    "tokenProxy": "https://lznnetxeklmdrykxtsbm.supabase.co/functions/v1/google-oauth"
+  }
 }
