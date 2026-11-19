@@ -6,7 +6,7 @@
    The JS never chooses a repo or a URL — that is fixed inside the app (see IfinexUpdatePlugin.java). Release notes are shown as plain text only. */
 (function (W, D) {
   'use strict';
-  var WEB_VER = '14.0';
+  var WEB_VER = '14.1';
   var LAST_KEY = 'ifx_upd_last', BANNER_KEY = 'ifx_upd_banner';
   var CHECK_EVERY_MS = 3 * 3600 * 1000;     // background check cadence
 
@@ -108,7 +108,7 @@
       area.appendChild(btn('Close', false, close)); setDot(false); return;
     }
     setDot(true);
-    status.textContent = 'Update available: v' + r.version + (r.build ? ' (built ' + bdate(r.build) + ')' : '') + ' — you have v' + r.installedVersion + (r.installedBuild ? ' (built ' + bdate(r.installedBuild) + ')' : '') + (r.assetSize ? ' · ' + mb(r.assetSize) : '') + '. Nothing is downloaded until you tap Download.';
+    status.textContent = 'Update available: v' + r.version + (r.build ? ' (built ' + bdate(r.build) + ')' : '') + ' — you have v' + r.installedVersion + (r.installedBuild ? ' (built ' + bdate(r.installedBuild) + ')' : '') + (r.assetSize ? ' · ' + mb(r.assetSize) : '') + '. Tap Download to open it in your browser, then open the .apk and tap Install.';
     if (r.notes) { var pre = el('pre', 'white-space:pre-wrap;font:inherit;font-size:.76rem;color:var(--muted,#9aa3c7);background:var(--card2,rgba(255,255,255,.05));border-radius:10px;padding:9px;max-height:150px;overflow:auto;margin:6px 0;'); pre.textContent = r.notes.slice(0, 900); area.appendChild(pre); }
     var bar = el('div', 'height:8px;border-radius:6px;background:var(--card2,rgba(255,255,255,.1));overflow:hidden;margin-top:10px;display:none;'), fill = el('div', 'height:100%;width:0;background:var(--accent,#4d96ff);transition:width .2s;'); bar.appendChild(fill); area.appendChild(bar);
     var go = btn('Download update', true, async function () {
@@ -136,8 +136,8 @@
         else status.textContent = 'Android install screen opened — tap Install there. The app restarts when it finishes.';
       } catch (e) { status.textContent = '❌ ' + friendly(e); status.style.color = '#FF6B6B'; }
     });
-    area.appendChild(go);
-    area.appendChild(btn('Download in browser instead', false, async function () { try { await p.openInBrowser(); status.textContent = 'Your browser opened the download. When it finishes, open the .apk and tap Install.'; } catch (e) { status.textContent = '❌ ' + friendly(e); status.style.color = '#FF6B6B'; } }));
+    /* v14.1: no in-app APK install (the install permission triggers Google Play Protect) — update = open the download in the browser */
+    area.appendChild(btn('Download update (opens browser)', true, async function () { try { await p.openInBrowser(); status.textContent = 'Your browser opened the download. When it finishes, open the .apk and tap Install.'; } catch (e) { status.textContent = '❌ ' + friendly(e); status.style.color = '#FF6B6B'; } }));
     area.appendChild(btn('Later', false, close));
   }
 
